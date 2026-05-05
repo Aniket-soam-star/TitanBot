@@ -1,8 +1,3 @@
-
-
-
-
-
 import { Events } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getLevelingConfig, getUserLevelData } from '../services/leveling.js';
@@ -19,18 +14,24 @@ export default {
       
       if (message.author.bot || !message.guild) return;
 
+      // Auto reply handler
+      if (client.autoReplies) {
+        const content = message.content.toLowerCase();
+        for (const [key, response] of client.autoReplies.entries()) {
+          const [guildId, trigger] = key.split(':');
+          if (guildId === message.guild.id && content.includes(trigger)) {
+            await message.reply(response);
+            break;
+          }
+        }
+      }
+
       await handleLeveling(message, client);
     } catch (error) {
       logger.error('Error in messageCreate event:', error);
     }
   }
 };
-
-
-
-
-
-
 
 
 async function handleLeveling(message, client) {
@@ -85,6 +86,34 @@ async function handleLeveling(message, client) {
     }
 
     
+    const minXP = levelingConfig.xpRange?.min || levelingConfig.xpPerMessage?.min || 15;
+    const maxXP = levelingConfig.xpRange?.max || levelingConfig.xpPerMessage?.max || 25;
+
+    
+    const safeMinXP = Math.max(1, minXP);
+    const safeMaxXP = Math.max(safeMinXP, maxXP);
+
+    
+    const xpToGive = Math.floor(Math.random() * (safeMaxXP - safeMinXP + 1)) + safeMinXP;
+
+    
+    let finalXP = xpToGive;
+    if (levelingConfig.xpMultiplier && levelingConfig.xpMultiplier > 1) {
+      finalXP = Math.floor(finalXP * levelingConfig.xpMultiplier);
+    }
+
+    
+    const result = await addXp(client, message.guild, message.member, finalXP);
+    
+    if (result.success && result.leveledUp) {
+      logger.info(
+        `${message.author.tag} leveled up to level ${result.level} in ${message.guild.name}`
+      );
+    }
+  } catch (error) {
+    logger.error('Error handling leveling for message:', error);
+  }
+}    
     const minXP = levelingConfig.xpRange?.min || levelingConfig.xpPerMessage?.min || 15;
     const maxXP = levelingConfig.xpRange?.max || levelingConfig.xpPerMessage?.max || 25;
 
