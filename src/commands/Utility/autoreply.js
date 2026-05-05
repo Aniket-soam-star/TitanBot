@@ -20,13 +20,13 @@ export default {
       .setDescription('List all auto replies'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-  async execute(interaction, client) {
+  async execute(interaction) {
+    const client = interaction.client;
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
     const dbKey = `guild:${guildId}:autoreplies`;
 
     try {
-      // Load existing replies from DB
       let replies = await getFromDb(dbKey, {});
 
       if (sub === 'add') {
@@ -35,6 +35,42 @@ export default {
 
         replies[trigger] = response;
         await setInDb(dbKey, replies);
+
+        if (!client.autoReplies) client.autoReplies = new Map();
+        client.autoReplies.set(`${guildId}:${trigger}`, response);
+
+        await interaction.reply(`✅ Auto reply added!\n**Trigger:** ${trigger}\n**Response:** ${response}`);
+
+      } else if (sub === 'remove') {
+        const trigger = interaction.options.getString('trigger').toLowerCase();
+
+        if (replies[trigger]) {
+          delete replies[trigger];
+          await setInDb(dbKey, replies);
+
+          if (client.autoReplies) client.autoReplies.delete(`${guildId}:${trigger}`);
+
+          await interaction.reply(`🗑️ Removed auto reply for: **${trigger}**`);
+        } else {
+          await interaction.reply({ content: `❌ No auto reply found for: **${trigger}**`, ephemeral: true });
+        }
+
+      } else if (sub === 'list') {
+        const entries = Object.entries(replies);
+        if (entries.length === 0) {
+          await interaction.reply('❌ No auto replies set.');
+        } else {
+          const list = entries.map(([t, r]) => `• **${t}** → ${r}`).join('\n');
+          await interaction.reply(`📋 **Auto Replies:**\n${list}`);
+        }
+      }
+
+    } catch (error) {
+      logger.error('Error in autoreply command:', error);
+      await interaction.reply({ content: '❌ Something went wrong.', ephemeral: true });
+    }
+  }
+};        await setInDb(dbKey, replies);
 
         // Sync to in-memory cache
         if (!client.autoReplies) client.autoReplies = new Map();
