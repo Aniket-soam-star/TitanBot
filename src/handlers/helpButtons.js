@@ -44,13 +44,13 @@ export const helpBugReportButton = {
         const githubButton = new ButtonBuilder()
             .setLabel('🐛 Report Bug on GitHub')
             .setStyle(ButtonStyle.Link)
-            .setURL('https://github.com/codebymitch/TitanBot/issues');
+            .setURL('https://discord.gg/XgmVfGz2F');
 
         const bugRow = new ActionRowBuilder().addComponents(githubButton);
 
         const bugReportEmbed = createEmbed({
             title: '🐛 Bug Report',
-            description: 'Found a bug? Please report it on our GitHub Issues page!\n\n' +
+            description: 'Found a bug? Please report it on our discord server!\n\n' +
                 '**When reporting a bug, please include:**\n' +
                 '• 📝 Detailed description of the issue\n' +
                 '• 📋 Steps to reproduce the problem\n' +
