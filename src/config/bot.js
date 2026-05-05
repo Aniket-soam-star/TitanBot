@@ -25,7 +25,7 @@ export const botConfig = {
     activities: [
       {
         // Text users will see (example: "Playing /help | Titan Bot").
-        name: "Made with ❤️",
+        name: "Made by Graveword_77😎",
         // Activity type number (0 = Playing).
         type: 0, 
       },
@@ -88,18 +88,18 @@ export const botConfig = {
   embeds: {
     colors: {
       // Main brand colors.
-      primary: "#336699", 
-      secondary: "#2F3136", 
+      primary: "#FFD700", 
+      secondary: "#000000", 
 
       // Standard status colors for success/error/warning/info messages.
-      success: "#57F287", 
-      error: "#ED4245", 
-      warning: "#FEE75C", 
-      info: "#3498DB", 
+      success: "#FFD700", 
+      error: "#000000", 
+      warning: "#FF0000", 
+      info: "#3FFD700", 
 
       // Neutral utility colors.
-      light: "#FFFFFF",
-      dark: "#202225",
+      light: "#FFD700",
+      dark: "#000000",
       gray: "#99AAB5",
 
       // Discord-style palette shortcuts.
@@ -121,9 +121,9 @@ export const botConfig = {
         closed: "#ED4245",
         pending: "#99AAB5",
       },
-      economy: "#F1C40F",
-      birthday: "#E91E63",
-      moderation: "#9B59B6",
+      economy: "#00FF00",
+      birthday: "#FFFF00",
+      moderation: "#FF0000",
 
       // Ticket priority color mapping.
       priority: {
@@ -131,12 +131,12 @@ export const botConfig = {
         low: "#3498db",
         medium: "#2ecc71",
         high: "#f1c40f",
-        urgent: "#e74c3c",
+        urgent: "#FF0000",
       },
     },
     footer: {
       // Default footer text used in bot embeds.
-      text: "Titan Bot",
+      text: "Zero Bot",
       // Footer icon URL (null = no icon).
       icon: null,
     },
@@ -160,11 +160,11 @@ export const botConfig = {
       // Plural display name.
       namePlural: "coins",
       // Currency symbol shown in balances.
-      symbol: "$",
+      symbol: "£",
     },
 
     // Starting balance for new users.
-    startingBalance: 0,
+    startingBalance: 50,
 
     // Maximum bank amount before upgrades (if upgrades are used).
     baseBankCapacity: 100000,
