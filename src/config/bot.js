@@ -25,9 +25,9 @@ export const botConfig = {
     activities: [
       {
         // Text users will see (example: "Playing /help | Titan Bot").
-        name: "Made by Graveword_77😎",
+        name: "/help | Zero Bot",
         // Activity type number (0 = Playing).
-        type: 3, 
+        type: 0, 
       },
     ],
   },
@@ -95,7 +95,7 @@ export const botConfig = {
       success: "#FFD700", 
       error: "#000000", 
       warning: "#FF0000", 
-      info: "#3FFD700", 
+      info: "#FFD700", 
 
       // Neutral utility colors.
       light: "#FFD700",
@@ -440,18 +440,18 @@ export const botConfig = {
     leveling: true,
     moderation: true,
     logging: true,
-    welcome: false,
+    welcome: true,
 
     // Community engagement systems.
-    tickets: false,
+    tickets: true,
     giveaways: true,
     birthday: true,
-    counter: false,
+    counter: true,
 
     // Security and self-service systems.
-    verification: false,
+    verification: true,
     reactionRoles: true,
-    joinToCreate: false,
+    joinToCreate: true,
 
     // Utility/quality-of-life modules.
     voice: true,
@@ -473,7 +473,6 @@ export function validateConfig(config) {
     logger.debug('DISCORD_TOKEN exists:', !!process.env.DISCORD_TOKEN);
     logger.debug('TOKEN exists:', !!process.env.TOKEN);
     logger.debug('CLIENT_ID exists:', !!process.env.CLIENT_ID);
-    logger.debug('GUILD_ID exists:', !!process.env.GUILD_ID);
     logger.debug('POSTGRES_HOST exists:', !!process.env.POSTGRES_HOST);
     logger.debug('NODE_ENV:', process.env.NODE_ENV);
   }
@@ -546,4 +545,4 @@ export default botConfig;
 
 
 
-
+    
