@@ -1,3 +1,4 @@
+import { Routes } from '@discordjs/rest';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -288,7 +289,39 @@ const registeredNames = new Set();
                 throw error;
             }
         } else {
-            logger.info('Skipping global command registration - bot is guild-only');
+            // ── Global registration (works in every server) ──────────────────────
+            logger.info(`Registering ${commands.length} commands GLOBALLY (all servers)`);
+            logger.info('Note: Global commands may take up to 1 hour to appear in new servers.');
+
+            // Validate commands before sending
+            let validationErrors = [];
+            commands.forEach(cmd => {
+                if (cmd.name && cmd.name.length > 32)
+                    validationErrors.push(`Command ${cmd.name}: name too long`);
+                if (cmd.description && cmd.description.length > 110)
+                    validationErrors.push(`Command ${cmd.name}: description too long`);
+            });
+
+            if (validationErrors.length > 0) {
+                logger.error('Command validation failed:', validationErrors);
+                throw new Error(`Validation failed with ${validationErrors.length} error(s)`);
+            }
+
+            const MAX_COMMANDS = 100;
+            const commandsToRegister = commands.length > MAX_COMMANDS
+                ? (logger.warn(`Truncating to ${MAX_COMMANDS} commands`), commands.slice(0, MAX_COMMANDS))
+                : commands;
+
+            try {
+                await client.rest.put(
+                    Routes.applicationCommands(client.user.id),
+                    { body: commandsToRegister }
+                );
+                logger.info(`Successfully registered ${commandsToRegister.length} global commands.`);
+            } catch (error) {
+                logger.error('Failed to register global commands:', error);
+                throw error;
+            }
         }
     } catch (error) {
         logger.error('Error registering commands:', error);
@@ -326,4 +359,4 @@ export async function reloadCommand(client, commandName) {
     }
 }
 
-
+                                                                                                                                                                                 
