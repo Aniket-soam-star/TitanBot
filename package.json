@@ -1,7 +1,7 @@
 {
-  "name": "titanbot-custom",
+  "name": "zero-bot",
   "version": "2.0.0",
-  "description": "Modular Ultimate Community Bot by Touchpoint Support",
+  "description": "Zero Bot — Discord moderation and community bot",
   "main": "src/app.js",
   "type": "module",
   "scripts": {
