@@ -1,13 +1,15 @@
 // 📁 REPLACE → src/events/ready.js
 //
 // Changes vs original:
-//   • NEW: restoreReminders() — re-registers all pending reminders from DB on startup
+//   • NEW: applyConfigOverrides() — loads saved /botconfig changes from DB
+//   • NEW: restoreReminders()     — re-registers pending reminders on restart
 
 import { Events } from 'discord.js';
 import { logger, startupLog } from '../utils/logger.js';
 import config from '../config/application.js';
 import { reconcileReactionRoleMessages } from '../services/reactionRoleService.js';
 import { getFromDb, setInDb } from '../utils/database.js';
+import botConfig from '../config/bot.js';
 
 export default {
     name: Events.ClientReady,
@@ -21,13 +23,18 @@ export default {
             startupLog(`Serving ${client.guilds.cache.size} guild(s)`);
             startupLog(`Loaded ${client.commands.size} commands`);
 
+            // ── Apply saved /botconfig overrides ───────────────────────────
+            await applyConfigOverrides(client);
+
+            // ── Reconcile reaction roles ───────────────────────────────────
             const reconciliationSummary = await reconcileReactionRoleMessages(client);
             startupLog(
                 `Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`
             );
 
-            // ── Restore pending reminders ──────────────────────────────────────────
+            // ── Restore pending reminders ──────────────────────────────────
             await restoreReminders(client);
+
         } catch (error) {
             logger.error('Error in ready event:', error);
         }
@@ -35,41 +42,89 @@ export default {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Reminder restoration
-//  Scans DB keys matching reminders:{userId} for all known guilds' members,
-//  but because we store by userId directly we iterate guild member caches.
-//  A simpler approach: store a global index of active reminder user IDs.
+//  CONFIG OVERRIDE LOADER
+//  Reads the flat overrides saved by /botconfig and merges them into the
+//  live botConfig object using dot-notation keys.
+//  Example key: 'economy.currency.name' → botConfig.economy.currency.name
+// ═══════════════════════════════════════════════════════════════════════════
+async function applyConfigOverrides(client) {
+    try {
+        const overrides = await getFromDb('zerobot:global:config', {});
+        const keys = Object.keys(overrides);
+
+        if (keys.length === 0) {
+            startupLog('No bot config overrides found.');
+            return;
+        }
+
+        let applied = 0;
+
+        for (const key of keys) {
+            try {
+                const value = overrides[key];
+                const parts = key.split('.');
+
+                // Handle special cases
+                if (key === 'presence') {
+                    // Full presence object — apply to bot and config
+                    Object.assign(botConfig.presence, value);
+                    client.user.setPresence(value);
+                    applied++;
+                    continue;
+                }
+
+                // Walk the botConfig object and set the nested value
+                let obj = botConfig;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (obj[parts[i]] === undefined) { obj = null; break; }
+                    obj = obj[parts[i]];
+                }
+                if (obj !== null && obj !== undefined) {
+                    obj[parts[parts.length - 1]] = value;
+                    applied++;
+                }
+            } catch (e) {
+                logger.warn(`Failed to apply config override for key "${key}":`, e.message);
+            }
+        }
+
+        startupLog(`Applied ${applied}/${keys.length} saved bot config override(s).`);
+    } catch (error) {
+        logger.error('Error applying config overrides:', error);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  REMINDER RESTORATION
+//  Restores pending reminders from DB so they survive bot restarts.
 // ═══════════════════════════════════════════════════════════════════════════
 async function restoreReminders(client) {
     try {
         if (!client.reminders) client.reminders = new Map();
 
-        // We keep a global index: reminder_users → Set<userId>
         const userIds = await getFromDb('reminder_users', []);
         if (!Array.isArray(userIds) || userIds.length === 0) {
             startupLog('No pending reminders to restore.');
             return;
         }
 
-        let restored  = 0;
-        let expired   = 0;
-        const now     = Date.now();
+        let restored = 0;
+        let expired  = 0;
+        const now    = Date.now();
 
         for (const userId of userIds) {
-            const key       = `reminders:${userId}`;
-            let reminders   = await getFromDb(key, []);
+            const key     = `reminders:${userId}`;
+            let reminders = await getFromDb(key, []);
             if (!Array.isArray(reminders)) continue;
 
             const active = [];
 
             for (const r of reminders) {
                 if (r.fireAt <= now) {
-                    // Fire immediately — reminder is overdue
                     fireReminder(client, r, key);
                     expired++;
                 } else {
-                    // Schedule normally
-                    const delay = r.fireAt - now;
+                    const delay   = r.fireAt - now;
                     const timeout = setTimeout(() => fireReminder(client, r, key), delay);
                     client.reminders.set(r.id, timeout);
                     active.push(r);
@@ -77,7 +132,6 @@ async function restoreReminders(client) {
                 }
             }
 
-            // Write back only future reminders
             await setInDb(key, active);
         }
 
@@ -93,12 +147,10 @@ async function fireReminder(client, reminder, dbKey) {
         if (ch) {
             await ch.send({ content: `<@${reminder.userId}> ⏰ Reminder: **${reminder.message}**` });
         } else {
-            // Try DM
             const user = await client.users.fetch(reminder.userId).catch(() => null);
             if (user) await user.send(`⏰ Reminder: **${reminder.message}**`).catch(() => {});
         }
 
-        // Remove from DB
         const current = await getFromDb(dbKey, []);
         await setInDb(dbKey, current.filter(r => r.id !== reminder.id));
         client.reminders?.delete(reminder.id);
