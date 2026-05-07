@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
@@ -13,7 +13,7 @@ import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
 
-class TitanBot extends Client {
+class ZeroBot extends Client {
   constructor() {
     super({
       intents: [
@@ -46,7 +46,7 @@ class TitanBot extends Client {
 
   async start() {
     try {
-      startupLog('Starting TitanBot...');
+      startupLog('Starting Zero Bot...');
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       startupLog('Initializing database...');
@@ -184,7 +184,7 @@ class TitanBot extends Client {
 
     app.get('/', (req, res) => {
       res.status(200).json({ 
-        message: 'TitanBot System Online',
+        message: 'Zero Bot Online',
         version: '2.0.0',
         timestamp: new Date().toISOString()
       });
@@ -301,7 +301,15 @@ class TitanBot extends Client {
 
   async registerCommands() {
     try {
-      await registerSlashCommands(this, this.config.bot.guildId);
+      // Pass guildId only if explicitly set (dev/testing mode).
+      // Leave it unset for global registration (all servers).
+      const guildId = this.config.bot.guildId || null;
+      if (guildId) {
+        startupLog(`DEV MODE: Registering commands for guild ${guildId} only (instant)`);
+      } else {
+        startupLog('PRODUCTION: Registering commands globally (may take up to 1 hour in new servers)');
+      }
+      await registerSlashCommands(this, guildId);
     } catch (error) {
       logger.error('Error registering commands:', error);
     }
@@ -356,7 +364,7 @@ class TitanBot extends Client {
 }
 
 try {
-  const bot = new TitanBot();
+  const bot = new ZeroBot();
   
   const setupShutdown = () => {
     process.on('SIGTERM', () => bot.shutdown('SIGTERM'));
@@ -380,7 +388,7 @@ try {
   process.exit(1);
 }
 
-export default TitanBot;
+export default ZeroBot;
 
 
-
+  
