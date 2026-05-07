@@ -1,4 +1,4 @@
-import { Routes } from '@discordjs/rest';
+import { Routes } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
