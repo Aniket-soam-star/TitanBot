@@ -8,21 +8,21 @@ export default {
         .setDescription("Report a bug or issue with the bot"),
 
     async execute(interaction) {
-        const githubButton = new ButtonBuilder()
-            .setLabel('?? Report Bug on GitHub')
+        const supportButton = new ButtonBuilder()
+            .setLabel('üêõ Report Bug ‚Äî Support Server')
             .setStyle(ButtonStyle.Link)
-            .setURL('https://github.com/codebymitch/TitanBot/issues');
+            .setURL('https://discord.gg/XgmVfGz2F');
 
-        const row = new ActionRowBuilder().addComponents(githubButton);
+        const row = new ActionRowBuilder().addComponents(supportButton);
 
         const bugReportEmbed = createEmbed({
             title: '?? Bug Report',
-            description: 'Found a bug? Please report it on our GitHub Issues page!\n\n' +
+            description: 'Found a bug? Please report it on our support server!\n\n' +
             '**When reporting a bug, please include:**\n' +
-            'ï ?? Detailed description of the issue\n' +
-            'ï ?? Steps to reproduce the problem\n' +
-            'ï ?? Screenshots if applicable\n' +
-            'ï ?? Your bot version and environment\n\n' +
+            'ÔøΩ ?? Detailed description of the issue\n' +
+            'ÔøΩ ?? Steps to reproduce the problem\n' +
+            'ÔøΩ ?? Screenshots if applicable\n' +
+            'ÔøΩ ?? Your bot version and environment\n\n' +
             'This helps us fix issues faster and more effectively!',
             color: 'error'
         })
@@ -34,7 +34,6 @@ export default {
         });
     },
 };
-
 
 
 
