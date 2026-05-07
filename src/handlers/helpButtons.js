@@ -60,7 +60,7 @@ export const helpBugReportButton = {
             color: 'error'
         });
         bugReportEmbed.setFooter({
-            text: 'TitanBot Bug Reporting System',
+            text: 'Zero Bot Support',
             iconURL: client.user.displayAvatarURL()
         });
         bugReportEmbed.setTimestamp();
@@ -146,5 +146,4 @@ export const helpPaginationButton = {
         }
     },
 };
-
 
