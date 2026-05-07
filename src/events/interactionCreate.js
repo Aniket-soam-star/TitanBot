@@ -1,3 +1,7 @@
+// 📁 REPLACE → src/events/interactionCreate.js
+// Change: Added import for checkPermissions + permission check block before command.execute()
+// Everything else is identical to the original.
+
 import { Events, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getGuildConfig } from '../services/guildConfig.js';
@@ -9,6 +13,7 @@ import { InteractionHelper } from '../utils/interactionHelper.js';
 import { createInteractionTraceContext, runWithTraceContext } from '../utils/traceContext.js';
 import { validateChatInputPayloadOrThrow } from '../utils/commandInputValidation.js';
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
+import { checkPermissions } from '../utils/permissionGuard.js'; // ← NEW
 
 function withTraceContext(context = {}, traceContext = {}) {
   return {
@@ -87,6 +92,30 @@ export default {
                 );
               }
             }
+
+            // ── PERMISSION GUARD ─────────────────────────────────────────────────
+            // Runs AFTER cooldown + disabled-command checks, BEFORE command.execute()
+            // Checks: server owner bypass → admin bypass → user perms → bot perms
+            const permResult = await checkPermissions(interaction, interaction.commandName);
+            if (!permResult.allowed) {
+              logger.info(`[PermGuard] Blocked /${interaction.commandName} for ${interaction.user.tag} (${interaction.user.id}) — reason: ${permResult.reason}`, {
+                event: 'interaction.command.permission_denied',
+                traceId: interactionTraceContext.traceId,
+                guildId: interaction.guildId,
+                userId: interaction.user?.id,
+                command: interaction.commandName,
+                reason: permResult.reason
+              });
+
+              const replyPayload = { embeds: [permResult.embed], flags: MessageFlags.Ephemeral };
+              if (interaction.deferred) {
+                await interaction.editReply(replyPayload);
+              } else {
+                await interaction.reply(replyPayload);
+              }
+              return; // Stop here — do NOT call command.execute()
+            }
+            // ── END PERMISSION GUARD ─────────────────────────────────────────────
 
             await command.execute(interaction, guildConfig, client);
           } catch (error) {
@@ -281,9 +310,6 @@ export default {
 
           if (!selectMenu) {
             if (!interaction.customId.includes(':')) {
-              // No registered handler and no ':' delimiter — this is an inline-collected
-              // select menu (e.g. ticket_config_<guildId>, jointocreate_config_<id>).
-              // Return silently so the existing MessageComponentCollector handles it.
               return;
             }
 
@@ -343,8 +369,6 @@ export default {
 
           if (!modal) {
             if (!interaction.customId.includes(':')) {
-              // No registered handler and no ':' delimiter — this is an inline-awaited
-              // modal (e.g. via awaitModalSubmit). Return silently so the caller handles it.
               return;
             }
 
