@@ -11,6 +11,7 @@ import { getLevelingConfig, getUserLevelData } from '../services/leveling.js';
 import { addXp } from '../services/xpSystem.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
 import { getFromDb, setInDb } from '../utils/database.js';
+import { handleShortcut } from '../shortcuts/shortcutHandler.js'; // ← NEW
 
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS  = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
@@ -31,6 +32,12 @@ export default {
     async execute(message, client) {
         try {
             if (message.author.bot || !message.guild) return;
+
+            // ── Shortcut commands (~ban, ~kick, ~mute, etc.) ───────────────────────
+            if (message.content.startsWith('~')) {
+                await handleShortcut(message, client);
+                return;
+            }
 
             // ── Auto-reply ─────────────────────────────────────────────────────────
             if (client.autoReplies) {
@@ -259,4 +266,4 @@ async function handleLeveling(message, client) {
     } catch (error) {
         logger.error('Error handling leveling for message:', error);
     }
-      }
+}
