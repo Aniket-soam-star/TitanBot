@@ -20,7 +20,6 @@ import {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ComponentType,
 } from 'discord.js';
 import { createEmbed } from '../../utils/embeds.js';
 import { getFromDb, setInDb } from '../../utils/database.js';
@@ -31,14 +30,13 @@ import { botConfig } from '../../config/bot.js';
 // ─── DB helpers ──────────────────────────────────────────────────────────────
 const DB_KEY = 'zerobot:global:config';
 
-async function loadOverrides()         { return getFromDb(DB_KEY, {}); }
+async function loadOverrides()     { return getFromDb(DB_KEY, {}); }
 async function saveKey(key, value) {
     const ov = await loadOverrides();
     ov[key]  = value;
     await setInDb(DB_KEY, ov);
 }
 
-// Apply dot-notation key to live botConfig (e.g. "economy.currency.name")
 function applyLive(dotKey, value) {
     try {
         const parts = dotKey.split('.');
@@ -48,7 +46,7 @@ function applyLive(dotKey, value) {
             obj = obj[parts[i]];
         }
         obj[parts[parts.length - 1]] = value;
-    } catch (e) { /* silent */ }
+    } catch { /* silent */ }
 }
 
 async function persist(dotKey, value) {
@@ -57,11 +55,12 @@ async function persist(dotKey, value) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const STATUS_LABELS  = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
-const ACTIVITY_TYPE  = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
-const isHex          = s => /^#[0-9A-Fa-f]{6}$/.test(s);
-const fmt            = v => `\`${v}\``;
-const PANEL_TIMEOUT  = 10 * 60 * 1000; // 10 minutes
+const STATUS_LABELS = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
+const ACTIVITY_TYPE = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
+const isHex         = s => /^#[0-9A-Fa-f]{6}$/.test(s);
+const fmt           = v => `\`${v}\``;
+const PANEL_TIMEOUT = 10 * 60 * 1000;
+const MODAL_TIMEOUT = 5  * 60 * 1000;
 
 function btn(id, label, style = ButtonStyle.Primary) {
     return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
@@ -451,9 +450,9 @@ function currencyModal() {
         .setCustomId('modal_currency')
         .setTitle('Edit Currency')
         .addComponents(
-            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',       c.symbol     ?? '£')),
-            row(input('cur_name',   'Name singular (e.g. coin)',   c.name       ?? 'coins')),
-            row(input('cur_plural', 'Name plural (e.g. coins)',    c.namePlural ?? 'coins')),
+            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',    c.symbol     ?? '£')),
+            row(input('cur_name',   'Name singular (e.g. coin)', c.name       ?? 'coins')),
+            row(input('cur_plural', 'Name plural (e.g. coins)',  c.namePlural ?? 'coins')),
         );
 }
 
@@ -488,8 +487,8 @@ function robModal() {
         .setCustomId('modal_rob')
         .setTitle('Edit Rob & Jail Settings')
         .addComponents(
-            row(input('rob_rate', 'Rob Success Rate (0.0 – 1.0)',     String(e.robSuccessRate ?? 0.4))),
-            row(input('rob_jail', 'Jail Time on Failure (minutes)',    String((e.robFailJailTime ?? 3600000) / 60000))),
+            row(input('rob_rate', 'Rob Success Rate (0.0 – 1.0)',  String(e.robSuccessRate ?? 0.4))),
+            row(input('rob_jail', 'Jail Time on Failure (minutes)', String((e.robFailJailTime ?? 3600000) / 60000))),
         );
 }
 
@@ -524,291 +523,4 @@ function welcomeModal(type) {
 
 function cooldownModal() {
     return new ModalBuilder()
-        .setCustomId('modal_cooldown')
-        .setTitle('Edit Default Cooldown')
-        .addComponents(row(
-            new TextInputBuilder()
-                .setCustomId('cooldown_secs')
-                .setLabel('Cooldown in seconds (e.g. 5)')
-                .setStyle(TextInputStyle.Short)
-                .setValue(String(botConfig.commands.defaultCooldown ?? 3))
-                .setMaxLength(4)
-                .setRequired(true)
-        ));
-}
-
-// ─── PAGE MAP ─────────────────────────────────────────────────────────────────
-// Maps a panel_* button ID → { embed, rows }
-function getPage(pageId) {
-    switch (pageId) {
-        case 'main':             return { embed: mainEmbed(),     rows: mainRows() };
-        case 'panel_presence':   return { embed: presenceEmbed(), rows: presenceRows() };
-        case 'panel_branding':   return { embed: brandingEmbed(), rows: brandingRows() };
-        case 'panel_economy':    return { embed: economyEmbed(),  rows: economyRows() };
-        case 'panel_features':   return { embed: featuresEmbed(), rows: featuresRows() };
-        case 'panel_giveaway':   return { embed: giveawayEmbed(), rows: giveawayRows() };
-        case 'panel_welcome':    return { embed: welcomeEmbed(),  rows: welcomeRows() };
-        case 'panel_cooldown':   return { embed: cooldownEmbed(), rows: cooldownRows() };
-        case 'panel_status':     return { embed: statusEmbed(),   rows: statusRows() };
-        default:                 return null;
-    }
-}
-
-// ─── EXECUTE ─────────────────────────────────────────────────────────────────
-
-export default {
-    data: new SlashCommandBuilder()
-        .setName('panel')
-        .setDescription('Open the Zero Bot interactive configuration panel')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    category: 'core',
-
-    async execute(interaction, config, client) {
-        if (!isOwner(interaction)) {
-            return interaction.reply({
-                embeds: [createEmbed({
-                    title: '🔒 Access Denied',
-                    description: 'Only server administrators can use the configuration panel.',
-                    color: 'error',
-                    timestamp: true,
-                })],
-                flags: MessageFlags.Ephemeral,
-            });
-        }
-
-        const deferSuccess = await InteractionHelper.safeDefer(interaction, { ephemeral: false });
-        if (!deferSuccess) return;
-
-        const { embed, rows } = getPage('main');
-        const msg = await interaction.editReply({ embeds: [embed], components: rows });
-
-        // ── Collector ────────────────────────────────────────────────────────
-        const collector = msg.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: PANEL_TIMEOUT,
-        });
-
-        let currentPage = 'main';
-
-        collector.on('collect', async i => {
-            try {
-                const id = i.customId;
-
-                // ── Navigation buttons ──────────────────────────────────────
-                if (id === 'panel_back') {
-                    await i.deferUpdate();
-                    currentPage = 'main';
-                    const page = getPage('main');
-                    return i.editReply({ embeds: [page.embed], components: page.rows });
-                }
-
-                if (getPage(id)) {
-                    await i.deferUpdate();
-                    currentPage = id;
-                    const page = getPage(id);
-                    return i.editReply({ embeds: [page.embed], components: page.rows });
-                }
-
-                // ── Presence status select ──────────────────────────────────
-                if (id === 'presence_status_select') {
-                    await i.deferUpdate();
-                    const newStatus = i.values[0];
-                    await persist('presence.status', newStatus);
-                    try { client.user.setStatus(newStatus); } catch { /* ignore */ }
-                    return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
-                }
-
-                // ── Presence activity type select ───────────────────────────
-                if (id === 'presence_acttype_select') {
-                    await i.deferUpdate();
-                    const newType = Number(i.values[0]);
-                    const activities = botConfig.presence.activities ?? [{}];
-                    activities[0] = { ...activities[0], type: newType };
-                    await persist('presence.activities', activities);
-                    try { client.user.setActivity(activities[0].name, { type: newType }); } catch { /* ignore */ }
-                    return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
-                }
-
-                // ── Features toggle select ──────────────────────────────────
-                if (id === 'features_toggle') {
-                    await i.deferUpdate();
-                    const key = i.values[0];
-                    const current = botConfig.features[key];
-                    await persist(`features.${key}`, !current);
-                    return i.editReply({ embeds: [featuresEmbed()], components: featuresRows() });
-                }
-
-                // ── Presence status rows trigger ────────────────────────────
-                if (id === 'presence_status') {
-                    await i.deferUpdate();
-                    return i.editReply({ embeds: [presenceEmbed()], components: presenceStatusRows() });
-                }
-
-                if (id === 'presence_acttype') {
-                    await i.deferUpdate();
-                    return i.editReply({ embeds: [presenceEmbed()], components: presenceActTypeRows() });
-                }
-
-                // ── Modal-opening buttons ───────────────────────────────────
-                const modalMap = {
-                    'presence_acttext': actTextModal(),
-                    'branding_footer':  footerModal(),
-                    'branding_main':    mainColorsModal(),
-                    'branding_status':  statusColorsModal(),
-                    'econ_currency':    currencyModal(),
-                    'econ_balances':    balancesModal(),
-                    'econ_work':        workModal(),
-                    'econ_rob':         robModal(),
-                    'gv_settings':      giveawayModal(),
-                    'wlc_welcome':      welcomeModal('welcome'),
-                    'wlc_goodbye':      welcomeModal('goodbye'),
-                    'cd_edit':          cooldownModal(),
-                };
-
-                if (modalMap[id]) {
-                    return i.showModal(modalMap[id]);
-                }
-
-            } catch (err) {
-                logger.error('[Panel] Collector error:', err);
-            }
-        });
-
-        // ── Modal submit listener ─────────────────────────────────────────────
-        const modalFilter = i => i.user.id === interaction.user.id && i.isModalSubmit();
-        const modalCollector = msg.createMessageComponentCollector({
-            filter: () => false, // we use client.on below instead
-            time: PANEL_TIMEOUT,
-        });
-
-        const onModal = async i => {
-            if (!i.isModalSubmit() || i.user.id !== interaction.user.id) return;
-            try {
-                await i.deferUpdate();
-                const id = i.customId;
-
-                if (id === 'modal_acttext') {
-                    const text = i.fields.getTextInputValue('acttext').trim();
-                    const type = botConfig.presence.activities?.[0]?.type ?? 0;
-                    await persist('presence.activities', [{ name: text, type }]);
-                    try { client.user.setActivity(text, { type }); } catch { /* ignore */ }
-                    return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
-                }
-
-                if (id === 'modal_footer') {
-                    const text = i.fields.getTextInputValue('footer').trim();
-                    await persist('embeds.footer.text', text);
-                    return i.editReply({ embeds: [brandingEmbed()], components: brandingRows() });
-                }
-
-                if (id === 'modal_main_colors') {
-                    const primary   = i.fields.getTextInputValue('col_primary').trim();
-                    const secondary = i.fields.getTextInputValue('col_secondary').trim();
-                    if (!isHex(primary) || !isHex(secondary)) {
-                        return i.followUp({ content: '❌ Colors must be in #RRGGBB format.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('embeds.colors.primary',   primary);
-                    await persist('embeds.colors.secondary', secondary);
-                    return i.editReply({ embeds: [brandingEmbed()], components: brandingRows() });
-                }
-
-                if (id === 'modal_status_colors') {
-                    const fields = ['col_success', 'col_error', 'col_warning', 'col_info'];
-                    const keys   = ['success', 'error', 'warning', 'info'];
-                    for (let idx = 0; idx < fields.length; idx++) {
-                        const val = i.fields.getTextInputValue(fields[idx]).trim();
-                        if (!isHex(val)) {
-                            return i.followUp({ content: `❌ \`${keys[idx]}\` must be in #RRGGBB format.`, flags: MessageFlags.Ephemeral });
-                        }
-                        await persist(`embeds.colors.${keys[idx]}`, val);
-                    }
-                    return i.editReply({ embeds: [brandingEmbed()], components: brandingRows() });
-                }
-
-                if (id === 'modal_currency') {
-                    await persist('economy.currency.symbol',     i.fields.getTextInputValue('cur_symbol').trim());
-                    await persist('economy.currency.name',       i.fields.getTextInputValue('cur_name').trim());
-                    await persist('economy.currency.namePlural', i.fields.getTextInputValue('cur_plural').trim());
-                    return i.editReply({ embeds: [economyEmbed()], components: economyRows() });
-                }
-
-                if (id === 'modal_balances') {
-                    const start = Number(i.fields.getTextInputValue('bal_start'));
-                    const daily = Number(i.fields.getTextInputValue('bal_daily'));
-                    const bank  = Number(i.fields.getTextInputValue('bal_bank'));
-                    if ([start, daily, bank].some(isNaN)) {
-                        return i.followUp({ content: '❌ All balance values must be numbers.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('economy.startingBalance',  start);
-                    await persist('economy.dailyAmount',      daily);
-                    await persist('economy.baseBankCapacity', bank);
-                    return i.editReply({ embeds: [economyEmbed()], components: economyRows() });
-                }
-
-                if (id === 'modal_work') {
-                    const wMin = Number(i.fields.getTextInputValue('work_min'));
-                    const wMax = Number(i.fields.getTextInputValue('work_max'));
-                    const bMin = Number(i.fields.getTextInputValue('beg_min'));
-                    const bMax = Number(i.fields.getTextInputValue('beg_max'));
-                    if ([wMin, wMax, bMin, bMax].some(isNaN)) {
-                        return i.followUp({ content: '❌ All payout values must be numbers.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('economy.workMin', wMin);
-                    await persist('economy.workMax', wMax);
-                    await persist('economy.begMin',  bMin);
-                    await persist('economy.begMax',  bMax);
-                    return i.editReply({ embeds: [economyEmbed()], components: economyRows() });
-                }
-
-                if (id === 'modal_rob') {
-                    const rate = Number(i.fields.getTextInputValue('rob_rate'));
-                    const jail = Number(i.fields.getTextInputValue('rob_jail'));
-                    if (isNaN(rate) || isNaN(jail) || rate < 0 || rate > 1) {
-                        return i.followUp({ content: '❌ Rob rate must be between 0.0 and 1.0, jail time must be a number.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('economy.robSuccessRate',  rate);
-                    await persist('economy.robFailJailTime', jail * 60000);
-                    return i.editReply({ embeds: [economyEmbed()], components: economyRows() });
-                }
-
-                if (id === 'modal_giveaway') {
-                    const hours  = Number(i.fields.getTextInputValue('gv_hours'));
-                    const minWin = Number(i.fields.getTextInputValue('gv_minwin'));
-                    const maxWin = Number(i.fields.getTextInputValue('gv_maxwin'));
-                    if ([hours, minWin, maxWin].some(isNaN) || hours <= 0 || minWin < 1 || maxWin < minWin) {
-                        return i.followUp({ content: '❌ Invalid giveaway settings. Hours > 0, min ≥ 1, max ≥ min.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('giveaways.defaultDuration', hours * 3_600_000);
-                    await persist('giveaways.minimumWinners',  minWin);
-                    await persist('giveaways.maximumWinners',  maxWin);
-                    return i.editReply({ embeds: [giveawayEmbed()], components: giveawayRows() });
-                }
-
-                if (id === 'modal_welcome_msg' || id === 'modal_goodbye_msg') {
-                    const key = id === 'modal_welcome_msg' ? 'welcome.defaultWelcomeMessage' : 'welcome.defaultGoodbyeMessage';
-                    await persist(key, i.fields.getTextInputValue('msg').trim());
-                    return i.editReply({ embeds: [welcomeEmbed()], components: welcomeRows() });
-                }
-
-                if (id === 'modal_cooldown') {
-                    const secs = Number(i.fields.getTextInputValue('cooldown_secs'));
-                    if (isNaN(secs) || secs < 0) {
-                        return i.followUp({ content: '❌ Cooldown must be a non-negative number.', flags: MessageFlags.Ephemeral });
-                    }
-                    await persist('commands.defaultCooldown', secs);
-                    return i.editReply({ embeds: [cooldownEmbed()], components: cooldownRows() });
-                }
-
-            } catch (err) {
-                logger.error('[Panel] Modal handler error:', err);
-            }
-        };
-
-        client.on('interactionCreate', onModal);
-
-        collector.on('end', () => {
-            client.off('interactionCreate', onModal);
-            msg.edit({ components: [] }).catch(() => {});
-        });
-    },
-};
+  
