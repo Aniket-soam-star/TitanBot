@@ -100,6 +100,7 @@ function mainEmbed() {
             '🎁 **Giveaway**  •  Default duration and winner limits',
             '🌐 **Welcome**   •  Join and leave message templates',
             '⏱️ **Cooldown**  •  Default command cooldown',
+            '🚫 **Commands**  •  Enable / disable individual commands',
             '📊 **Status**    •  View all current settings at a glance',
         ].join('\n'),
         color: 'primary',
@@ -257,6 +258,7 @@ function mainRows() {
             btn('panel_welcome',  '🌐 Welcome',   ButtonStyle.Secondary),
             btn('panel_cooldown', '⏱️ Cooldown', ButtonStyle.Secondary),
             btn('panel_status',   '📊 Status',    ButtonStyle.Secondary),
+            btn('panel_commands', '🚫 Commands',  ButtonStyle.Danger),
         ),
     ];
 }
@@ -345,6 +347,30 @@ function featuresRows() {
                 .setCustomId('features_toggle')
                 .setPlaceholder('Select a feature to toggle on/off...')
                 .addOptions(opts)
+        ),
+        backRow(),
+    ];
+}
+
+
+function commandsRows(client, disabledCmds) {
+    const allCommands = [...(client?.commands?.keys() ?? [])].sort();
+    const options = allCommands.slice(0, 25).map(name =>
+        new StringSelectMenuOptionBuilder()
+            .setLabel(`/${name}`)
+            .setValue(name)
+            .setDescription(disabledCmds?.[name] ? 'Currently DISABLED — click to enable' : 'Currently ENABLED — click to disable')
+            .setEmoji(disabledCmds?.[name] ? '🚫' : '✅')
+    );
+    if (options.length === 0) {
+        return [backRow()];
+    }
+    return [
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId('commands_toggle')
+                .setPlaceholder('Select a command to enable/disable...')
+                .addOptions(options)
         ),
         backRow(),
     ];
@@ -504,6 +530,26 @@ function giveawayModal() {
         );
 }
 
+
+function welcomeModal(type) {
+    const isWelcome = type === 'welcome';
+    const current = isWelcome
+        ? botConfig.welcome?.defaultWelcomeMessage ?? 'Welcome {user} to {server}!'
+        : botConfig.welcome?.defaultGoodbyeMessage ?? 'Goodbye {user}, we hope to see you again!';
+    return new ModalBuilder()
+        .setCustomId(isWelcome ? 'modal_welcome_msg' : 'modal_goodbye_msg')
+        .setTitle(isWelcome ? 'Edit Welcome Message' : 'Edit Goodbye Message')
+        .addComponents(row(
+            new TextInputBuilder()
+                .setCustomId('msg')
+                .setLabel('Message (use {user} {server} {memberCount})')
+                .setStyle(TextInputStyle.Paragraph)
+                .setValue(current)
+                .setMaxLength(500)
+                .setRequired(true)
+        ));
+}
+
 function cooldownModal() {
     return new ModalBuilder()
         .setCustomId('modal_cooldown')
@@ -519,6 +565,19 @@ function cooldownModal() {
         ));
 }
 
+
+function commandsEmbed(client) {
+    const guildConfig = null; // will be loaded dynamically
+    return createEmbed({
+        title: '🚫 Command Toggles',
+        description: 'Use the select menu to disable or re-enable any command in this server.\n' +
+            'Disabled commands show an error to users when they try to use them.',
+        color: 'primary',
+        footer: { text: 'Server owners & admins can always use all commands' },
+        timestamp: true,
+    });
+}
+
 // ─── PAGE MAP ─────────────────────────────────────────────────────────────────
 function getPage(pageId) {
     switch (pageId) {
@@ -531,6 +590,7 @@ function getPage(pageId) {
         case 'panel_welcome':  return { embed: welcomeEmbed(),  rows: welcomeRows() };
         case 'panel_cooldown': return { embed: cooldownEmbed(), rows: cooldownRows() };
         case 'panel_status':   return { embed: statusEmbed(),   rows: statusRows() };
+        case 'panel_commands': return null; // handled dynamically
         default:               return null;
     }
 }
@@ -586,6 +646,16 @@ export default {
                     return i.editReply({ embeds: [page.embed], components: page.rows });
                 }
 
+
+                // ── Commands page ──────────────────────────────────────────────
+                if (id === 'panel_commands') {
+                    await i.deferUpdate();
+                    const configKey = `guild:${interaction.guildId}:config`;
+                    let guildCfg = {};
+                    try { guildCfg = await getFromDb(configKey, {}); } catch {}
+                    return i.editReply({ embeds: [commandsEmbed(client)], components: commandsRows(client, guildCfg.disabledCommands ?? {}) });
+                }
+
                 // ── Presence: sub-nav buttons ──────────────────────────────────
                 if (id === 'presence_status') {
                     await i.deferUpdate();
@@ -624,6 +694,33 @@ export default {
                     const current = botConfig.features[key];
                     await persist(`features.${key}`, !current);
                     return i.editReply({ embeds: [featuresEmbed()], components: featuresRows() });
+                }
+
+
+                // ── Commands: toggle select ────────────────────────────────────
+                if (id === 'commands_toggle') {
+                    await i.deferUpdate();
+                    const cmdName = i.values[0];
+                    const configKey = `guild:${interaction.guildId}:config`;
+                    let guildCfg = {};
+                    try { guildCfg = await getFromDb(configKey, {}); } catch {}
+                    if (!guildCfg.disabledCommands) guildCfg.disabledCommands = {};
+                    const wasDisabled = guildCfg.disabledCommands[cmdName];
+                    if (wasDisabled) {
+                        delete guildCfg.disabledCommands[cmdName];
+                    } else {
+                        guildCfg.disabledCommands[cmdName] = true;
+                    }
+                    await setInDb(configKey, guildCfg);
+                    const embed = createEmbed({
+                        title: '🚫 Command Toggles',
+                        description: `Command \`/${cmdName}\` is now **${wasDisabled ? '✅ enabled' : '🚫 disabled'}**.\n\n` +
+                            'Use the select menu to toggle more commands.',
+                        color: wasDisabled ? 'success' : 'error',
+                        footer: { text: 'Server owners & admins can always use all commands' },
+                        timestamp: true,
+                    });
+                    return i.editReply({ embeds: [embed], components: commandsRows(client, guildCfg.disabledCommands) });
                 }
 
                 // ── Modal-opening buttons ──────────────────────────────────────
