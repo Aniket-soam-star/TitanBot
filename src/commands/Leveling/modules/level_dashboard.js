@@ -19,8 +19,6 @@ import { successEmbed, errorEmbed } from '../../../utils/embeds.js';
 import { logger } from '../../../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../../../utils/errorHandler.js';
 import { getLevelingConfig, saveLevelingConfig } from '../../../services/leveling.js';
-import { botHasPermission } from '../../../utils/permissionGuard.js';
-
 // ─── Embed & Menu Builders ────────────────────────────────────────────────────
 
 function buildDashboardEmbed(cfg, guild) {
@@ -308,18 +306,7 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
         await chanInteraction.deferUpdate();
         const channel = chanInteraction.channels.first();
 
-        if (!botHasPermission(channel, ['SendMessages', 'EmbedLinks'])) {
-            await chanInteraction.followUp({
-                embeds: [
-                    errorEmbed(
-                        'Missing Permissions',
-                        `I need **SendMessages** and **EmbedLinks** permissions in ${channel} to send level-up notifications.`,
-                    ),
-                ],
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
+        
 
         cfg.levelUpChannel = channel.id;
         await saveLevelingConfig(client, guildId, cfg);
