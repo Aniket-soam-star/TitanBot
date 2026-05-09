@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { checkRateLimit } from '../../utils/rateLimiter.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
         .setName("massban")
@@ -33,6 +34,10 @@ export default {
 
     async execute(interaction, config, client) {
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'massban');
+        if (!allowed) return;
+
         if (!deferSuccess) {
             logger.warn(`Massban interaction defer failed`, {
                 userId: interaction.user.id,
@@ -42,15 +47,7 @@ export default {
             return;
         }
 
-        if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-            return await InteractionHelper.safeEditReply(interaction, {
-                embeds: [
-                    errorEmbed(
-                        "Permission Denied",
-                        "You do not have permission to ban members."
-                    ),
-                ],
-            });
+        );
         }
 
         const usersInput = interaction.options.getString("users");
@@ -226,6 +223,4 @@ export default {
         }
     }
 };
-
-
 

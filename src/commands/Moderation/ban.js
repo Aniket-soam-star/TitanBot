@@ -6,6 +6,7 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { ModerationService } from '../../services/moderationService.js';
 import { handleInteractionError } from '../../utils/errorHandler.js';
 import { TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -60,17 +61,6 @@ export default {
                     );
                 }
             } else {
-                // Banning by ID (user not in server) — require ManageGuild or Administrator
-                const isOwner    = interaction.guild.ownerId === interaction.user.id;
-                const hasHighPerm = interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)
-                                 || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
-                if (!isOwner && !hasHighPerm) {
-                    throw new TitanBotError(
-                        'Insufficient permissions',
-                        ErrorTypes.PERMISSION,
-                        'You need **Manage Server** or **Administrator** to ban users who are not currently in the server.'
-                    );
-                }
             }
 
             // Execute the ban

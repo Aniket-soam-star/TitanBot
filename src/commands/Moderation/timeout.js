@@ -4,8 +4,8 @@ import { logModerationAction } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
 
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 const durationChoices = [
     { name: "5 minutes", value: 5 },
     { name: "10 minutes", value: 10 },
@@ -41,6 +41,10 @@ export default {
 
     async execute(interaction, config, client) {
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'timeout');
+        if (!allowed) return;
+
         if (!deferSuccess) {
             logger.warn(`Timeout interaction defer failed`, {
                 userId: interaction.user.id,
@@ -51,14 +55,6 @@ export default {
         }
 
         try {
-            if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-                throw new TitanBotError(
-                    "User lacks permission",
-                    ErrorTypes.PERMISSION,
-                    "You need the `Moderate Members` permission to set a timeout."
-                );
-            }
-
             const targetUser = interaction.options.getUser("target");
             const member = interaction.options.getMember("target");
             const durationMinutes = interaction.options.getInteger("duration");
@@ -139,6 +135,4 @@ export default {
         }
     }
 };
-
-
 

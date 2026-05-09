@@ -6,6 +6,7 @@ import { checkRateLimit } from '../../utils/rateLimiter.js';
 import { getColor } from '../../config/bot.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
     .setName("purge")
@@ -21,6 +22,10 @@ export default {
 
   async execute(interaction, config, client) {
     const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'purge');
+        if (!allowed) return;
+
     if (!deferSuccess) {
       logger.warn(`Purge interaction defer failed`, {
         userId: interaction.user.id,
@@ -29,16 +34,6 @@ export default {
       });
       return;
     }
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages))
-      return await InteractionHelper.safeEditReply(interaction, {
-        embeds: [
-          errorEmbed(
-            "Permission Denied",
-            "You need the `Manage Messages` permission to purge messages.",
-          ),
-        ],
-      });
 
     const amount = interaction.options.getInteger("amount");
     const channel = interaction.channel;
@@ -130,6 +125,4 @@ flags: MessageFlags.Ephemeral,
     }
   }
 };
-
-
 

@@ -4,20 +4,11 @@ import { logger } from '../../utils/logger.js';
 import { getFromDb, setInDb, deleteFromDb } from '../../utils/database.js';
 import { sanitizeInput } from '../../utils/sanitization.js';
 
-
-
-
-
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 function getUserNotesKey(guildId, userId) {
     return `moderation_user_notes_${guildId}_${userId}`;
 }
-
-
-
-
-
 
 function getGuildNotesListKey(guildId) {
     return `moderation_user_notes_list_${guildId}`;
@@ -100,15 +91,7 @@ export default {
     category: "moderation",
 
     async execute(interaction, config, client) {
-        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-            return InteractionHelper.safeReply(interaction, {
-                embeds: [
-                    errorEmbed(
-                        "Permission Denied",
-                        "You do not have permission to manage user notes."
-                    ),
-                ],
-            });
+        );
         }
 
         const subcommand = interaction.options.getSubcommand();
@@ -336,8 +319,4 @@ function getNoteTypeInfo(type) {
     
     return types[type] || types.neutral;
 }
-
-
-
-
 

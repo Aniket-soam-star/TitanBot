@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { getColor } from '../../config/bot.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
         .setName("unlock")
@@ -16,6 +17,10 @@ export default {
 
     async execute(interaction, config, client) {
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'unlock');
+        if (!allowed) return;
+
         if (!deferSuccess) {
             logger.warn(`Unlock interaction defer failed`, {
                 userId: interaction.user.id,
@@ -24,22 +29,7 @@ export default {
             });
             return;
         }
-
-        if (
-            !interaction.member.permissions.has(
-                PermissionFlagsBits.ManageChannels,
-            )
-        )
-            return await InteractionHelper.safeEditReply(interaction, {
-                embeds: [
-                    errorEmbed(
-                        "Permission Denied",
-                        "You need the `Manage Channels` permission to unlock channels.",
-                    ),
-                ],
-            });
-
-        const channel = interaction.channel;
+const channel = interaction.channel;
         const everyoneRole = interaction.guild.roles.everyone;
 
         try {
@@ -121,6 +111,4 @@ export default {
         }
     }
 };
-
-
 

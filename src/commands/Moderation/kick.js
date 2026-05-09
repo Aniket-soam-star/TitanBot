@@ -4,6 +4,7 @@ import { logModerationAction } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -23,15 +24,10 @@ export default {
 
   async execute(interaction, config, client) {
     try {
-      
-      if (!interaction.member.permissions.has(PermissionFlagsBits.KickMembers)) {
-        throw new TitanBotError(
-          "User lacks permission",
-          ErrorTypes.PERMISSION,
-          "You do not have permission to kick members."
-        );
-      }
+        const allowed = await hasCommandAccess(interaction, 'kick');
+        if (!allowed) return;
 
+      
       const targetUser = interaction.options.getUser("target");
       const member = interaction.options.getMember("target");
       const reason = interaction.options.getString("reason") || "No reason provided";
@@ -120,6 +116,4 @@ export default {
     }
   }
 };
-
-
 
