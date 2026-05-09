@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { getWelcomeConfig } from '../../utils/database.js';
 import verificationDashboard from './modules/verification_dashboard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -68,25 +69,7 @@ export default {
             const subcommand = interaction.options.getSubcommand();
             const guild = interaction.guild;
 
-            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-                throw createError(
-                    'Missing ManageGuild permission for verification admin subcommand',
-                    ErrorTypes.PERMISSION,
-                    'You need the **Manage Server** permission to use this verification subcommand.',
-                    { subcommand, requiredPermission: 'ManageGuild', userId: interaction.user.id }
-                );
-            }
-
-            switch (subcommand) {
-                case "setup":
-                    return await handleSetup(interaction, guild, client);
-                case "remove":
-                    return await handleRemove(interaction, guild, client);
-                case "dashboard":
-                    return await verificationDashboard.execute(interaction, config, client);
-                default:
-                    throw createError(
-                        `Unknown subcommand: ${subcommand}`,
+            `,
                         ErrorTypes.VALIDATION,
                         "Please select a valid subcommand.",
                         { subcommand }
@@ -182,6 +165,9 @@ async function handleSetup(interaction, guild, client) {
 
     await InteractionHelper.safeDefer(interaction);
 
+        const allowed = await hasCommandAccess(interaction, 'verification');
+        if (!allowed) return;
+
     const verifyEmbed = createEmbed({
         title: "✅ Server Verification",
         description: message,
@@ -260,7 +246,4 @@ async function handleRemove(interaction, guild, client) {
         );
     }
 }
-
-
-
 
