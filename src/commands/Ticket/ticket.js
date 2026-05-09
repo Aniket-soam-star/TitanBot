@@ -104,16 +104,6 @@ export default {
             if (!deferred) {
                 return;
             }
-);
-                return await InteractionHelper.safeEditReply(interaction, {
-                    embeds: [
-                        errorEmbed(
-                            "Permission Denied",
-                            "You need the `Manage Channels` permission for this action.",
-                        ),
-                    ],
-                });
-            }
 
             const subcommand = interaction.options.getSubcommand();
 
