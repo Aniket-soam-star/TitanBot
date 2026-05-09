@@ -3,13 +3,10 @@ import { errorEmbed, successEmbed } from '../../../utils/embeds.js';
 import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { logger } from '../../../utils/logger.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../../utils/roleGuard.js';
 
 export default {
     async execute(interaction, config, client) {
-        );
-        }
-
         const channel = interaction.options.getChannel('channel');
         const guildId = interaction.guildId;
 
