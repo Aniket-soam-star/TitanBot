@@ -69,11 +69,13 @@ export default {
             const subcommand = interaction.options.getSubcommand();
             const guild = interaction.guild;
 
-            `,
-                        ErrorTypes.VALIDATION,
-                        "Please select a valid subcommand.",
-                        { subcommand }
-                    );
+            if (!['setup', 'remove', 'dashboard'].includes(subcommand)) {
+                throw createError(
+                    `Unknown subcommand: ${subcommand}`,
+                    ErrorTypes.VALIDATION,
+                    "Please select a valid subcommand.",
+                    { subcommand }
+                );
             }
         }, { command: 'verification', subcommand: interaction.options.getSubcommand() });
 
