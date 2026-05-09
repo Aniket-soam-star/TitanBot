@@ -6,6 +6,7 @@ import { handleInteractionError, createError, TitanBotError, ErrorTypes } from '
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { createReactionRoleMessage, hasDangerousPermissions, getAllReactionRoleMessages, deleteReactionRoleMessage } from '../../services/reactionRoleService.js';
 import { logEvent, EVENT_TYPES } from '../../services/loggingService.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -174,6 +175,10 @@ export default {
 
 async function handleSetup(interaction) {
     const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'reactroles');
+        if (!allowed) return;
+
     if (!deferSuccess) return;
     
     logger.info(`Reaction role setup initiated by ${interaction.user.tag} in guild ${interaction.guild.name}`);
