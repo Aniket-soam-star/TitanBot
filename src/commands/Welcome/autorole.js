@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { errorEmbed } from '../../utils/embeds.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { getGuildConfig } from '../../services/guildConfig.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 function createAutoroleInfoEmbed(description) {
     return new EmbedBuilder()
@@ -41,6 +42,10 @@ export default {
 
     async execute(interaction) {
         const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'autorole');
+        if (!allowed) return;
+
         if (!deferSuccess) {
             logger.warn(`Autorole interaction defer failed`, {
                 userId: interaction.user.id,
@@ -48,13 +53,6 @@ export default {
                 commandName: 'autorole'
             });
             return;
-        }
-
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-            return InteractionHelper.safeEditReply(interaction, {
-                embeds: [errorEmbed('Missing Permissions', 'You need the **Manage Server** permission to use `/autorole`.')],
-                flags: MessageFlags.Ephemeral
-            });
         }
 
     const { options, guild, client } = interaction;
@@ -245,6 +243,4 @@ export default {
         }
     },
 };
-
-
 

@@ -4,6 +4,7 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError, TitanBotError } from '../../utils/errorHandler.js';
 import greetDashboard from './modules/greet_dashboard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -18,17 +19,10 @@ export default {
 
     async execute(interaction, config, client) {
         try {
-            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-                return await InteractionHelper.safeReply(interaction, {
-                    embeds: [
-                        errorEmbed(
-                            'Missing Permissions',
-                            'You need the **Manage Server** permission to use `/greet`.',
-                        ),
-                    ],
-                    flags: MessageFlags.Ephemeral,
-                });
-            }
+        const allowed = await hasCommandAccess(interaction, 'greet');
+        if (!allowed) return;
+
+            
 
             const subcommand = interaction.options.getSubcommand();
 

@@ -5,6 +5,7 @@ import { getWelcomeConfig, updateWelcomeConfig } from '../../utils/database.js';
 import { formatWelcomeMessage } from '../../utils/welcome.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -36,6 +37,10 @@ export default {
     async execute(interaction) {
         try {
             const deferSuccess = await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'welcome');
+        if (!allowed) return;
+
             if (!deferSuccess) {
                 logger.warn(`Welcome interaction defer failed`, {
                     userId: interaction.user.id,
@@ -51,12 +56,7 @@ export default {
 
         const { options, guild, client } = interaction;
 
-        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-            return await InteractionHelper.safeEditReply(interaction, {
-                embeds: [errorEmbed('Missing Permissions', 'You need the **Manage Server** permission to use `/welcome`.')],
-                flags: MessageFlags.Ephemeral
-            });
-        }
+        
 
         const subcommand = options.getSubcommand();
 
@@ -145,6 +145,4 @@ export default {
         }
     },
 };
-
-
 
