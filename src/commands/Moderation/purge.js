@@ -6,7 +6,7 @@ import { checkRateLimit } from '../../utils/rateLimiter.js';
 import { getColor } from '../../config/bot.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
     .setName("purge")

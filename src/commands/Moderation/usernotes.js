@@ -5,7 +5,7 @@ import { getFromDb, setInDb, deleteFromDb } from '../../utils/database.js';
 import { sanitizeInput } from '../../utils/sanitization.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 function getUserNotesKey(guildId, userId) {
     return `moderation_user_notes_${guildId}_${userId}`;
 }
@@ -91,9 +91,6 @@ export default {
     category: "moderation",
 
     async execute(interaction, config, client) {
-        );
-        }
-
         const subcommand = interaction.options.getSubcommand();
         const targetUser = interaction.options.getUser("target");
         const guildId = interaction.guild.id;

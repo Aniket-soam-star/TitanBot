@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { checkRateLimit } from '../../utils/rateLimiter.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
         .setName("masskick")
@@ -37,9 +37,6 @@ export default {
                 commandName: 'masskick'
             });
             return;
-        }
-
-        );
         }
 
         const usersInput = interaction.options.getString("users");
