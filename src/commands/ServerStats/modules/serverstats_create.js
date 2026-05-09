@@ -3,8 +3,13 @@ import { createEmbed, errorEmbed, successEmbed } from '../../../utils/embeds.js'
 import { getServerCounters, saveServerCounters, updateCounter, getCounterBaseName, getCounterTypeLabel } from '../../../services/serverstatsService.js';
 import { logger } from '../../../utils/logger.js';
 
+
+
+
+
+
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../../utils/roleGuard.js';
 export async function handleCreate(interaction, client) {
     const guild = interaction.guild;
     const type = interaction.options.getString("type");
@@ -14,7 +19,6 @@ export async function handleCreate(interaction, client) {
     // Defer reply immediately to ensure interaction is acknowledged
     try {
         await InteractionHelper.safeDefer(interaction);
-
         const allowed = await hasCommandAccess(interaction, 'serverstats');
         if (!allowed) return;
 
@@ -24,7 +28,10 @@ export async function handleCreate(interaction, client) {
     }
 
     // Check permissions after deferring
-    ).catch(logger.error);
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+        await InteractionHelper.safeEditReply(interaction, { 
+            embeds: [errorEmbed("You need **Manage Channels** permission to create counters.")]
+        }).catch(logger.error);
         return;
     }
 
@@ -105,4 +112,6 @@ export async function handleCreate(interaction, client) {
         }).catch(logger.error);
     }
 }
+
+
 
