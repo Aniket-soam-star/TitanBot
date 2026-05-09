@@ -18,10 +18,6 @@ export default {
 
   async execute(interaction) {
     try {
-      
-      );
-      }
-
       // Dashboard-specific buttons
       if (interaction.customId === 'log_dash_refresh') {
         return await handleDashboardRefresh(interaction);

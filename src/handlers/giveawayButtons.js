@@ -133,11 +133,6 @@ export const giveawayEndHandler = {
                     { userId: interaction.user.id }
                 );
             }
-
-            
-            );
-            }
-
             const guildGiveaways = await getGuildGiveaways(client, interaction.guildId);
             const giveaway = guildGiveaways.find(g => g.messageId === interaction.message.id);
 
@@ -252,11 +247,6 @@ export const giveawayRerollHandler = {
                     { userId: interaction.user.id }
                 );
             }
-
-            
-            );
-            }
-
             const guildGiveaways = await getGuildGiveaways(client, interaction.guildId);
             const giveaway = guildGiveaways.find(g => g.messageId === interaction.message.id);
 
