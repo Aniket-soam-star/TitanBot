@@ -7,6 +7,7 @@ import { logger } from '../../utils/logger.js';
 import { handleInteractionError } from '../../utils/errorHandler.js';
 
 import ticketConfig from './modules/ticket_dashboard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -95,22 +96,15 @@ export default {
 
     async execute(interaction, config, client) {
         try {
+        const allowed = await hasCommandAccess(interaction, 'ticket');
+        if (!allowed) return;
+
             
             const deferred = await InteractionHelper.safeDefer(interaction, { flags: MessageFlags.Ephemeral });
             if (!deferred) {
                 return;
             }
-
-            if (
-                !interaction.member.permissions.has(
-                    PermissionFlagsBits.ManageChannels,
-                )
-            ) {
-                logger.warn('Ticket command permission denied', {
-                    userId: interaction.user.id,
-                    guildId: interaction.guildId,
-                    commandName: 'ticket'
-                });
+);
                 return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
                         errorEmbed(
@@ -285,7 +279,6 @@ description: panelMessage,
                         },
                     );
 
-
             } catch (error) {
                 logger.error('Ticket setup error', {
                     error: error.message,
@@ -331,6 +324,4 @@ description: panelMessage,
         }
     }
 };
-
-
 
