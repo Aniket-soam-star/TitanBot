@@ -22,8 +22,6 @@ import { successEmbed, errorEmbed } from '../../../utils/embeds.js';
 import { logger } from '../../../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../../../utils/errorHandler.js';
 import { getWelcomeConfig, saveWelcomeConfig } from '../../../utils/database.js';
-import { botHasPermission } from '../../../utils/permissionGuard.js';
-
 // ─── Embed & Menu Builders ────────────────────────────────────────────────────
 
 function buildDashboardEmbed(cfg, guild) {
@@ -379,18 +377,7 @@ async function handleWelcomeChannel(selectInteraction, rootInteraction, cfg, gui
         await chanInteraction.deferUpdate();
         const channel = chanInteraction.channels.first();
 
-        if (!botHasPermission(channel, ['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
-            await chanInteraction.followUp({
-                embeds: [
-                    errorEmbed(
-                        'Missing Permissions',
-                        `I need **View Channel**, **Send Messages**, and **Embed Links** in ${channel}.`,
-                    ),
-                ],
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
+        
 
         cfg.channelId = channel.id;
         await saveWelcomeConfig(client, guildId, cfg);
@@ -606,18 +593,7 @@ async function handleGoodbyeChannel(selectInteraction, rootInteraction, cfg, gui
         await chanInteraction.deferUpdate();
         const channel = chanInteraction.channels.first();
 
-        if (!botHasPermission(channel, ['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
-            await chanInteraction.followUp({
-                embeds: [
-                    errorEmbed(
-                        'Missing Permissions',
-                        `I need **View Channel**, **Send Messages**, and **Embed Links** in ${channel}.`,
-                    ),
-                ],
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
+        
 
         cfg.goodbyeChannelId = channel.id;
         await saveWelcomeConfig(client, guildId, cfg);
