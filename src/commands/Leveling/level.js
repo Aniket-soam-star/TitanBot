@@ -2,6 +2,7 @@ import { getColor } from '../../config/bot.js';
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
 import { createEmbed, errorEmbed } from '../../utils/embeds.js';
 import { getLevelingConfig, saveLevelingConfig } from '../../services/leveling.js';
+import { botHasPermission } from '../../utils/permissionGuard.js';
 import { TitanBotError, ErrorTypes, handleInteractionError } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
@@ -68,15 +69,24 @@ export default {
 
     async execute(interaction, config, client) {
         try {
-        const allowed = await hasCommandAccess(interaction, 'level');
-        if (!allowed) return;
-
             const deferred = await InteractionHelper.safeDefer(interaction, {
                 flags: MessageFlags.Ephemeral,
             });
+        const allowed = await hasCommandAccess(interaction, 'level');
+        if (!allowed) return;
+
             if (!deferred) return;
 
-            
+            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+                return await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [
+                        errorEmbed(
+                            'Missing Permissions',
+                            'You need the **Manage Server** permission to use this command.',
+                        ),
+                    ],
+                });
+            }
 
             const subcommand = interaction.options.getSubcommand();
 
@@ -104,7 +114,22 @@ export default {
                     });
                 }
 
-                >).\n\nUse \`/level dashboard\` to adjust any settings.`,
+                if (!botHasPermission(channel, ['SendMessages', 'EmbedLinks'])) {
+                    throw new TitanBotError(
+                        'Bot missing permissions in the specified channel',
+                        ErrorTypes.PERMISSION,
+                        `I need **SendMessages** and **EmbedLinks** permissions in ${channel} to send level-up notifications.`,
+                    );
+                }
+
+                const existingConfig = await getLevelingConfig(client, interaction.guildId);
+
+                if (existingConfig.configured) {
+                    return await InteractionHelper.safeEditReply(interaction, {
+                        embeds: [
+                            errorEmbed(
+                                'Leveling System Already Active',
+                                `The leveling system is already set up on this server (level-up notifications go to <#${existingConfig.levelUpChannel}>).\n\nUse \`/level dashboard\` to adjust any settings.`,
                             ),
                         ],
                     });
