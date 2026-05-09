@@ -3,12 +3,8 @@ import { createEmbed, errorEmbed, successEmbed } from '../../../utils/embeds.js'
 import { getServerCounters, saveServerCounters, updateCounter, getCounterEmoji, getCounterTypeLabel } from '../../../services/serverstatsService.js';
 import { logger } from '../../../utils/logger.js';
 
-
-
-
-
-
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export async function handleUpdate(interaction, client) {
     const guild = interaction.guild;
     const counterId = interaction.options.getString("counter-id");
@@ -17,16 +13,17 @@ export async function handleUpdate(interaction, client) {
     // Defer reply immediately to ensure interaction is acknowledged
     try {
         await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'serverstats');
+        if (!allowed) return;
+
     } catch (error) {
         logger.error("Failed to defer reply:", error);
         return;
     }
 
     // Check permissions after deferring
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
-        await InteractionHelper.safeEditReply(interaction, { 
-            embeds: [errorEmbed("You need **Manage Channels** permission to update counters.")]
-        }).catch(logger.error);
+    ).catch(logger.error);
         return;
     }
 
@@ -104,6 +101,4 @@ export async function handleUpdate(interaction, client) {
         }).catch(logger.error);
     }
 }
-
-
 

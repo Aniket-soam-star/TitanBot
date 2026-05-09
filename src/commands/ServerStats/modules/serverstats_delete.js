@@ -4,12 +4,8 @@ import { createEmbed, errorEmbed } from '../../../utils/embeds.js';
 import { getServerCounters, saveServerCounters, getCounterEmoji, getCounterTypeLabel } from '../../../services/serverstatsService.js';
 import { logger } from '../../../utils/logger.js';
 
-
-
-
-
-
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export async function handleDelete(interaction, client) {
     const guild = interaction.guild;
     const counterId = interaction.options.getString("counter-id");
@@ -17,16 +13,17 @@ export async function handleDelete(interaction, client) {
     // Defer reply immediately to ensure interaction is acknowledged
     try {
         await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'serverstats');
+        if (!allowed) return;
+
     } catch (error) {
         logger.error("Failed to defer reply:", error);
         return;
     }
 
     // Check permissions after deferring
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
-        await InteractionHelper.safeEditReply(interaction, { 
-            embeds: [errorEmbed("You need **Manage Channels** permission to delete counters.")]
-        }).catch(logger.error);
+    ).catch(logger.error);
         return;
     }
 
@@ -76,12 +73,6 @@ export async function handleDelete(interaction, client) {
         }).catch(logger.error);
     }
 }
-
-
-
-
-
-
 
 export async function performDeletionByCounterId(client, guild, counterId) {
     try {
@@ -141,14 +132,7 @@ export async function performDeletionByCounterId(client, guild, counterId) {
     }
 }
 
-
-
-
-
-
 function getCounterTypeDisplay(type) {
     return `${getCounterEmoji(type)} ${getCounterTypeLabel(type)}`;
 }
-
-
 

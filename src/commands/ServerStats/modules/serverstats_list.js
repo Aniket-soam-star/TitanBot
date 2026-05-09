@@ -4,28 +4,25 @@ import { createEmbed, errorEmbed } from '../../../utils/embeds.js';
 import { getServerCounters, saveServerCounters, getCounterEmoji as getCounterTypeEmoji, getCounterTypeLabel, getGuildCounterStats } from '../../../services/serverstatsService.js';
 import { logger } from '../../../utils/logger.js';
 
-
-
-
-
-
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 export async function handleList(interaction, client) {
     const guild = interaction.guild;
     
     // Defer reply immediately to ensure interaction is acknowledged
     try {
         await InteractionHelper.safeDefer(interaction);
+
+        const allowed = await hasCommandAccess(interaction, 'serverstats');
+        if (!allowed) return;
+
     } catch (error) {
         logger.error("Failed to defer reply:", error);
         return;
     }
     
     // Check permissions after deferring
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
-        await InteractionHelper.safeEditReply(interaction, { 
-            embeds: [errorEmbed("You need **Manage Channels** permission to view counters.")]
-        }).catch(logger.error);
+    ).catch(logger.error);
         return;
     }
 
@@ -136,29 +133,13 @@ export async function handleList(interaction, client) {
     }
 }
 
-
-
-
-
-
 function getCounterTypeDisplay(type) {
     return `${getCounterTypeEmoji(type)} ${getCounterTypeLabel(type)}`;
 }
 
-
-
-
-
-
 function getCounterEmoji(type) {
     return getCounterTypeEmoji(type);
 }
-
-
-
-
-
-
 
 function getCurrentCount(stats, type) {
     switch (type) {
@@ -172,6 +153,4 @@ function getCurrentCount(stats, type) {
             return 0;
     }
 }
-
-
 
