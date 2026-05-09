@@ -6,7 +6,7 @@ import { createLoggingDashboardComponents } from '../../../utils/loggingUi.js';
 import { errorEmbed } from '../../../utils/embeds.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { logger } from '../../../utils/logger.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../../utils/roleGuard.js';
 
 const EVENT_TYPES_BY_CATEGORY = Object.values(EVENT_TYPES).reduce((acc, eventType) => {
     const [category] = eventType.split('.');
@@ -117,9 +117,6 @@ export async function buildLoggingDashboardView(interaction, client) {
 export default {
     async execute(interaction, config, client) {
         try {
-            );
-            }
-
             await InteractionHelper.safeDefer(interaction);
 
         const allowed = await hasCommandAccess(interaction, 'logging');

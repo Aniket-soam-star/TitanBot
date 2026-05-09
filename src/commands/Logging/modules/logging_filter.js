@@ -4,13 +4,10 @@ import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js
 import { logEvent } from '../../../utils/moderation.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { logger } from '../../../utils/logger.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../../utils/roleGuard.js';
 
 export default {
     async execute(interaction, config, client) {
-        );
-        }
-
         if (!client.db) {
             return InteractionHelper.safeEditReply(interaction, {
                 embeds: [errorEmbed('Database Error', 'Database not initialized.')],
