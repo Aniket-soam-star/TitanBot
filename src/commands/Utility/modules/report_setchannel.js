@@ -3,20 +3,20 @@ import { errorEmbed, successEmbed } from '../../../utils/embeds.js';
 import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { logger } from '../../../utils/logger.js';
+import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
 
 export default {
     async execute(interaction, config, client) {
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
-            return InteractionHelper.safeReply(interaction, {
-                embeds: [errorEmbed('Permission Denied', 'You need **Manage Server** permissions to set the report channel.')],
-                ephemeral: true,
-            });
+        );
         }
 
         const channel = interaction.options.getChannel('channel');
         const guildId = interaction.guildId;
 
         try {
+        const allowed = await hasCommandAccess(interaction, 'report');
+        if (!allowed) return;
+
             const guildConfig = await getGuildConfig(client, guildId);
             guildConfig.reportChannelId = channel.id;
             await setGuildConfig(client, guildId, guildConfig);
