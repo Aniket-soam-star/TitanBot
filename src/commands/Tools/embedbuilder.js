@@ -522,4 +522,13 @@ async function handleSetImages(selectInteraction, rootInteraction, state) {
                 .setLabel('Clear Thumbnail')
                 .setDescription('Remove the current thumbnail')
                 .setValue('clear_thumbnail')
-                .
+                .setEmoji('🗑️'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Clear Large Image')
+                .setDescription('Remove the current large image')
+                .setValue('clear_image')
+                .setEmoji('🗑️'),
+        );
+
+    return imageSelect;
+}
