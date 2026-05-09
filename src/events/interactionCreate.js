@@ -79,6 +79,16 @@ export default {
             if (interaction.guild) {
               guildConfig = await getGuildConfig(client, interaction.guild.id, interactionTraceContext);
               if (guildConfig?.disabledCommands?.[interaction.commandName]) {
+                const disabledEmbed = {
+                  title: '🚫 Command Disabled',
+                  description: `The \`/${interaction.commandName}\` command has been disabled in this server by an administrator.`,
+                  color: 0xED4245,
+                  timestamp: new Date().toISOString(),
+                  footer: { text: 'Contact a server admin if you think this is a mistake.' },
+                };
+                await interaction.reply({ embeds: [disabledEmbed], flags: MessageFlags.Ephemeral });
+                return;
+                // unreachable — kept for type safety
                 throw createError(
                   `Command ${interaction.commandName} is disabled in this guild`,
                   ErrorTypes.CONFIGURATION,
