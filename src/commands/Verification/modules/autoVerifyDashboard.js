@@ -20,8 +20,6 @@ import { TitanBotError, ErrorTypes } from '../../../utils/errorHandler.js';
 import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js';
 import { getWelcomeConfig } from '../../../utils/database.js';
 import { validateAutoVerifyCriteria } from '../../../services/verificationService.js';
-import { botHasPermission } from '../../../utils/permissionGuard.js';
-
 const autoVerifyDefaults = botConfig.verification?.autoVerify || {};
 const minAccountAgeDays = autoVerifyDefaults.minAccountAge ?? 1;
 const maxAccountAgeDays = autoVerifyDefaults.maxAccountAge ?? 365;
@@ -540,5 +538,4 @@ async function handleAccountAge(selectInteraction, rootInteraction, guildConfig,
 }
 
 // ─── Handle Member Duration ────────────────────────────────────────────────────
-
 

@@ -21,8 +21,6 @@ import { logger } from '../../../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../../../utils/errorHandler.js';
 import { getGuildConfig, setGuildConfig } from '../../../services/guildConfig.js';
 import { getWelcomeConfig } from '../../../utils/database.js';
-import { botHasPermission } from '../../../utils/permissionGuard.js';
-
 // ─── Live Panel Sync ──────────────────────────────────────────────────────────
 
 async function updateLivePanel(guild, cfg) {
@@ -432,18 +430,7 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
         await chanInteraction.deferUpdate();
         const newChannel = chanInteraction.channels.first();
 
-        if (!botHasPermission(newChannel, ['ViewChannel', 'SendMessages', 'EmbedLinks'])) {
-            await chanInteraction.followUp({
-                embeds: [
-                    errorEmbed(
-                        'Missing Permissions',
-                        `I need **View Channel**, **Send Messages**, and **Embed Links** permissions in ${newChannel}.`,
-                    ),
-                ],
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
+        
 
         // Delete old panel if it exists
         if (cfg.channelId && cfg.messageId) {
