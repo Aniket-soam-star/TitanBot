@@ -10,7 +10,7 @@ import {
 } from '../../services/giveawayService.js';
 import { logEvent, EVENT_TYPES } from '../../services/loggingService.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -41,9 +41,6 @@ export default {
                 );
             }
 
-            
-            );
-            }
 
             logger.info(`Giveaway end initiated by ${interaction.user.tag} in guild ${interaction.guildId}`);
 

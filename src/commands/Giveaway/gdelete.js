@@ -6,7 +6,7 @@ import { getGuildGiveaways, deleteGiveaway } from '../../utils/giveaways.js';
 import { logEvent, EVENT_TYPES } from '../../services/loggingService.js';
 
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import {{ hasCommandAccess }} from '../../utils/roleGuard.js';
+import { hasCommandAccess } from '../../utils/roleGuard.js';
 export default {
     data: new SlashCommandBuilder()
         .setName("gdelete")
@@ -36,9 +36,6 @@ export default {
                 );
             }
 
-            
-            );
-            }
 
             logger.info(`Giveaway deletion started by ${interaction.user.tag} in guild ${interaction.guildId}`);
 
