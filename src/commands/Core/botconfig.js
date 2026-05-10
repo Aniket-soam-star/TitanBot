@@ -22,7 +22,7 @@ import { getFromDb, setInDb } from '../../utils/database.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import botConfig from '../../config/bot.js';
-import { hasCommandAccess } from '../../utils/roleGuard.js';
+import { hasCommandAccess, COMMAND_TIERS, TIER_LABELS } from '../../utils/roleGuard.js';
 // ── Helper ──────────────────────────────────────────────────────────────────
 const DB_KEY = 'zerobot:global:config';
 
