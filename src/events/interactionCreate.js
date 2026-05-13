@@ -1,3 +1,8 @@
+// src/events/interactionCreate.js
+// Fix: Added hasCommandAccess import + central role guard check before command.execute()
+// This means ALL commands go through roleGuard automatically — no need to add it
+// individually to every command file.
+
 import { Events, MessageFlags } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getGuildConfig } from '../services/guildConfig.js';
@@ -9,6 +14,7 @@ import { InteractionHelper } from '../utils/interactionHelper.js';
 import { createInteractionTraceContext, runWithTraceContext } from '../utils/traceContext.js';
 import { validateChatInputPayloadOrThrow } from '../utils/commandInputValidation.js';
 import { enforceAbuseProtection, formatCooldownDuration } from '../utils/abuseProtection.js';
+import { hasCommandAccess } from '../utils/roleGuard.js'; // ← ADDED
 
 function withTraceContext(context = {}, traceContext = {}) {
   return {
@@ -97,6 +103,15 @@ export default {
                 );
               }
             }
+
+            // ── Central Role Guard ─────────────────────────────────────────────
+            // Checks: server owner → admin → DB role override → default Discord perm
+            // hasCommandAccess sends its own denial embed and returns false if denied.
+            // Commands that already call hasCommandAccess internally will check twice
+            // (harmless), but this ensures ALL commands are covered automatically.
+            const allowed = await hasCommandAccess(interaction, interaction.commandName);
+            if (!allowed) return;
+            // ── End Role Guard ─────────────────────────────────────────────────
 
             await command.execute(interaction, guildConfig, client);
           } catch (error) {
