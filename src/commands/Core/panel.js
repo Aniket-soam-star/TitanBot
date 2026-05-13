@@ -1,12 +1,13 @@
-// 📁 src/commands/Core/panel.js
+// 📁 REPLACE → src/commands/Core/panel.js
 //
-// Command: /panel
-// Opens a full interactive configuration panel for Zero Bot.
-// Click buttons to navigate, edit buttons open pre-filled modals.
-// No need to type any subcommand names — everything is visual.
-//
-// Saves to DB key: zerobot:global:config (same as /botconfig)
-// Applied to live botConfig immediately on each save.
+// Changes vs previous version:
+//   1. Added 🔐 Permissions page — select a command, pick roles via Discord's
+//      native role selector. Reads/writes guild:{guildId}:cmd_perms (same key
+//      that roleGuard.js and /botconfig permissions use).
+//   2. Fixed commandsRows — now paginated so all commands are reachable,
+//      not just the first 25.
+//   3. mainRows: moved Commands + added Permissions into a third row.
+//   4. RoleSelectMenuBuilder imported for native role picking (no typing IDs).
 
 import {
     SlashCommandBuilder,
@@ -17,6 +18,7 @@ import {
     ButtonStyle,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
+    RoleSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
@@ -26,9 +28,12 @@ import { getFromDb, setInDb } from '../../utils/database.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
 import { botConfig } from '../../config/bot.js';
+import { COMMAND_TIERS, TIERS, TIER_LABELS } from '../../utils/roleGuard.js';
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
-const DB_KEY = 'zerobot:global:config';
+const DB_KEY      = 'zerobot:global:config';
+const PERMS_PER_PAGE = 24;  // Discord StringSelectMenu max = 25; leave 1 for safety
+const CMDS_PER_PAGE  = 24;
 
 async function loadOverrides()     { return getFromDb(DB_KEY, {}); }
 async function saveKey(key, value) {
@@ -54,13 +59,18 @@ async function persist(dotKey, value) {
     await saveKey(dotKey, value);
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const STATUS_LABELS = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
-const ACTIVITY_TYPE = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
-const isHex         = s => /^#[0-9A-Fa-f]{6}$/.test(s);
-const fmt           = v => `\`${v}\``;
-const PANEL_TIMEOUT = 10 * 60 * 1000;
-const MODAL_TIMEOUT = 5  * 60 * 1000;
+// All non-PUBLIC commands sorted alphabetically — used by Permissions page
+const NON_PUBLIC_CMDS = Object.entries(COMMAND_TIERS)
+    .filter(([, tier]) => tier !== TIERS.PUBLIC)
+    .map(([name, tier]) => ({ name, tier }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+// ─── Small helpers ─────────────────────────────────────────────────────────────
+const PANEL_TIMEOUT  = 10 * 60 * 1000;
+const STATUS_LABELS  = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
+const ACTIVITY_TYPE  = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
+const fmt            = v => `\`${v}\``;
+const isHex          = s => /^#[0-9A-Fa-f]{6}$/.test(s);
 
 function btn(id, label, style = ButtonStyle.Primary) {
     return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
@@ -69,9 +79,9 @@ function btn(id, label, style = ButtonStyle.Primary) {
 function input(customId, label, value = '') {
     return new TextInputBuilder()
         .setCustomId(customId)
-        .setLabel(label)
+        .setLabel(label.slice(0, 45))
         .setStyle(TextInputStyle.Short)
-        .setValue(String(value))
+        .setValue(String(value).slice(0, 100))
         .setRequired(true);
 }
 
@@ -93,15 +103,16 @@ function mainEmbed() {
             'Welcome to the bot configuration panel.',
             'Select a category below to view and edit its settings.',
             '',
-            '🟢 **Presence**  •  How the bot appears in the member list',
-            '🎨 **Branding**  •  Embed colors and footer text',
-            '💰 **Economy**   •  Currency, balances, work and rob settings',
-            '🧩 **Features**  •  Enable or disable feature modules',
-            '🎁 **Giveaway**  •  Default duration and winner limits',
-            '🌐 **Welcome**   •  Join and leave message templates',
-            '⏱️ **Cooldown**  •  Default command cooldown',
-            '🚫 **Commands**  •  Enable / disable individual commands',
-            '📊 **Status**    •  View all current settings at a glance',
+            '🟢 **Presence**     •  How the bot appears in the member list',
+            '🎨 **Branding**     •  Embed colors and footer text',
+            '💰 **Economy**      •  Currency, balances, work and rob settings',
+            '🧩 **Features**     •  Enable or disable feature modules',
+            '🎁 **Giveaway**     •  Default duration and winner limits',
+            '🌐 **Welcome**      •  Join and leave message templates',
+            '⏱️ **Cooldown**    •  Default command cooldown',
+            '📊 **Status**       •  View all current settings at a glance',
+            '🚫 **Commands**     •  Enable / disable individual commands',
+            '🔐 **Permissions**  •  Set which roles can use which commands',
         ].join('\n'),
         color: 'primary',
         footer: { text: 'Changes apply immediately • Panel times out after 10 minutes' },
@@ -243,35 +254,102 @@ function statusEmbed() {
     });
 }
 
+function commandsEmbed(client, page, total) {
+    return createEmbed({
+        title: '🚫 Command Enable / Disable',
+        description: 'Select a command from the dropdown to toggle it on or off for this server.\n\n' +
+            '> Server owners and admins can always use all commands regardless of this setting.',
+        color: 'primary',
+        footer: { text: `Page ${page + 1} of ${total} • Commands disabled here still show in /help` },
+        timestamp: true,
+    });
+}
+
+// ── PERMISSIONS PAGE EMBEDS ───────────────────────────────────────────────────
+
+async function permissionsEmbed(guildId) {
+    const overrides = await getFromDb(`guild:${guildId}:cmd_perms`, {});
+    const entries   = Object.entries(overrides);
+    const total     = NON_PUBLIC_CMDS.length;
+
+    const overrideLines = entries.length > 0
+        ? entries.map(([cmd, roleIds]) =>
+            `\`/${cmd}\` → ${roleIds.map(id => `<@&${id}>`).join(', ')}`
+          ).join('\n')
+        : '_No overrides set. All commands use default Discord permissions._';
+
+    return createEmbed({
+        title: '🔐 Command Permissions',
+        description: [
+            'Grant specific roles access to commands, overriding the default Discord permission requirement.',
+            '',
+            '**How to use:**',
+            '1. Pick a command from the dropdown below',
+            '2. Use the role selector to pick a role',
+            '3. Click **Add Role** or **Remove Role**',
+            '',
+            '**Current overrides for this server:**',
+            overrideLines,
+        ].join('\n'),
+        color: 'primary',
+        footer: { text: `${total} protected commands available • Owners & Admins always bypass permissions` },
+        timestamp: true,
+    });
+}
+
+function permDetailEmbed(cmdName, roleIds, tier) {
+    const roleList = roleIds?.length > 0
+        ? roleIds.map(id => `<@&${id}>`).join(', ')
+        : '_No role overrides — default Discord permission applies._';
+
+    return createEmbed({
+        title: `🔐 Permissions — \`/${cmdName}\``,
+        description: [
+            `**Default requirement:** ${TIER_LABELS[tier] ?? 'Unknown'}`,
+            '',
+            '**Allowed roles (overrides default):**',
+            roleList,
+            '',
+            'Use the role selector below then click **Add Role** or **Remove Role**.',
+            'Click **Clear All** to remove all overrides and restore the default requirement.',
+        ].join('\n'),
+        color: 'info',
+        footer: { text: 'Role overrides replace the default permission requirement entirely' },
+        timestamp: true,
+    });
+}
+
 // ─── ROW BUILDERS ─────────────────────────────────────────────────────────────
 
 function mainRows() {
     return [
-        new ActionRowBuilder().addComponents(
+        row(
             btn('panel_presence', '🟢 Presence',  ButtonStyle.Primary),
             btn('panel_branding', '🎨 Branding',  ButtonStyle.Primary),
             btn('panel_economy',  '💰 Economy',   ButtonStyle.Primary),
             btn('panel_features', '🧩 Features',  ButtonStyle.Primary),
         ),
-        new ActionRowBuilder().addComponents(
+        row(
             btn('panel_giveaway', '🎁 Giveaway',  ButtonStyle.Secondary),
             btn('panel_welcome',  '🌐 Welcome',   ButtonStyle.Secondary),
             btn('panel_cooldown', '⏱️ Cooldown', ButtonStyle.Secondary),
             btn('panel_status',   '📊 Status',    ButtonStyle.Secondary),
-            btn('panel_commands', '🚫 Commands',  ButtonStyle.Danger),
+        ),
+        row(
+            btn('panel_commands', '🚫 Commands',    ButtonStyle.Danger),
+            btn('panel_perms',    '🔐 Permissions', ButtonStyle.Primary),
         ),
     ];
 }
 
 function backRow() {
-    return new ActionRowBuilder().addComponents(
-        btn('panel_back', '← Back', ButtonStyle.Danger),
-    );
+    return row(btn('panel_back', '← Back', ButtonStyle.Danger));
 }
 
+// Presence rows
 function presenceRows() {
     return [
-        new ActionRowBuilder().addComponents(
+        row(
             btn('presence_status',  '🔘 Edit Status',        ButtonStyle.Primary),
             btn('presence_acttype', '🎮 Edit Activity Type', ButtonStyle.Primary),
             btn('presence_acttext', '📝 Edit Activity Text', ButtonStyle.Primary),
@@ -280,9 +358,10 @@ function presenceRows() {
     ];
 }
 
+// Branding rows
 function brandingRows() {
     return [
-        new ActionRowBuilder().addComponents(
+        row(
             btn('branding_footer', '📝 Footer Text',   ButtonStyle.Primary),
             btn('branding_main',   '🎨 Main Colors',   ButtonStyle.Primary),
             btn('branding_status', '✅ Status Colors', ButtonStyle.Primary),
@@ -291,48 +370,20 @@ function brandingRows() {
     ];
 }
 
+// Economy rows
 function economyRows() {
     return [
-        new ActionRowBuilder().addComponents(
-            btn('econ_currency', '🪙 Currency',     ButtonStyle.Primary),
-            btn('econ_balances', '💵 Balances',     ButtonStyle.Primary),
+        row(
+            btn('econ_currency', '🪙 Currency',   ButtonStyle.Primary),
+            btn('econ_balances', '💵 Balances',   ButtonStyle.Primary),
             btn('econ_work',     '⚒️ Work & Beg', ButtonStyle.Primary),
-            btn('econ_rob',      '🦹 Rob & Jail',  ButtonStyle.Primary),
+            btn('econ_rob',      '🦹 Rob & Jail', ButtonStyle.Primary),
         ),
         backRow(),
     ];
 }
 
-function giveawayRows() {
-    return [
-        new ActionRowBuilder().addComponents(
-            btn('gv_settings', '✏️ Edit Settings', ButtonStyle.Primary),
-        ),
-        backRow(),
-    ];
-}
-
-function welcomeRows() {
-    return [
-        new ActionRowBuilder().addComponents(
-            btn('wlc_welcome', '👋 Edit Welcome Msg', ButtonStyle.Primary),
-            btn('wlc_goodbye', '👋 Edit Goodbye Msg', ButtonStyle.Primary),
-        ),
-        backRow(),
-    ];
-}
-
-function cooldownRows() {
-    return [
-        new ActionRowBuilder().addComponents(
-            btn('cd_edit', '✏️ Edit Cooldown', ButtonStyle.Primary),
-        ),
-        backRow(),
-    ];
-}
-
-function statusRows() { return [backRow()]; }
-
+// Features rows
 function featuresRows() {
     const opts = Object.entries(botConfig.features).map(([key, enabled]) =>
         new StringSelectMenuOptionBuilder()
@@ -342,108 +393,135 @@ function featuresRows() {
             .setEmoji(enabled ? '✅' : '❌')
     );
     return [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('features_toggle')
-                .setPlaceholder('Select a feature to toggle on/off...')
-                .addOptions(opts)
+        row(new StringSelectMenuBuilder()
+            .setCustomId('features_toggle')
+            .setPlaceholder('Select a feature to toggle on/off...')
+            .addOptions(opts)),
+        backRow(),
+    ];
+}
+
+// Giveaway rows
+function giveawayRows() {
+    return [
+        row(btn('gv_settings', '✏️ Edit Settings', ButtonStyle.Primary)),
+        backRow(),
+    ];
+}
+
+// Welcome rows
+function welcomeRows() {
+    return [
+        row(
+            btn('wlc_welcome', '👋 Edit Welcome Msg', ButtonStyle.Primary),
+            btn('wlc_goodbye', '👋 Edit Goodbye Msg', ButtonStyle.Primary),
         ),
         backRow(),
     ];
 }
 
+// Cooldown rows
+function cooldownRows() {
+    return [
+        row(btn('cd_edit', '✏️ Edit Cooldown', ButtonStyle.Primary)),
+        backRow(),
+    ];
+}
 
-function commandsRows(client, disabledCmds) {
+// Status rows
+function statusRows() { return [backRow()]; }
+
+// ── Commands rows — PAGINATED ─────────────────────────────────────────────────
+function commandsRows(client, disabledCmds, page) {
     const allCommands = [...(client?.commands?.keys() ?? [])].sort();
-    const options = allCommands.slice(0, 25).map(name =>
+    const totalPages  = Math.ceil(allCommands.length / CMDS_PER_PAGE);
+    const slice       = allCommands.slice(page * CMDS_PER_PAGE, (page + 1) * CMDS_PER_PAGE);
+
+    const options = slice.map(name =>
         new StringSelectMenuOptionBuilder()
             .setLabel(`/${name}`)
             .setValue(name)
             .setDescription(disabledCmds?.[name] ? 'Currently DISABLED — click to enable' : 'Currently ENABLED — click to disable')
             .setEmoji(disabledCmds?.[name] ? '🚫' : '✅')
     );
-    if (options.length === 0) {
-        return [backRow()];
+
+    const rows = [];
+    if (options.length > 0) {
+        rows.push(row(new StringSelectMenuBuilder()
+            .setCustomId('commands_toggle')
+            .setPlaceholder('Select a command to enable/disable...')
+            .addOptions(options)));
     }
+
+    // Pagination + back
+    rows.push(row(
+        btn('cmds_prev', '◀ Prev', ButtonStyle.Secondary).setDisabled(page === 0),
+        btn('cmds_page', `${page + 1}/${totalPages}`, ButtonStyle.Primary).setDisabled(true),
+        btn('cmds_next', 'Next ▶', ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+        btn('panel_back', '← Back', ButtonStyle.Danger),
+    ));
+
+    return rows;
+}
+
+// ── Permissions rows ──────────────────────────────────────────────────────────
+
+// State 1: pick a command
+function permsCmdSelectRows(page) {
+    const totalPages = Math.ceil(NON_PUBLIC_CMDS.length / PERMS_PER_PAGE);
+    const slice      = NON_PUBLIC_CMDS.slice(page * PERMS_PER_PAGE, (page + 1) * PERMS_PER_PAGE);
+
+    const opts = slice.map(({ name, tier }) =>
+        new StringSelectMenuOptionBuilder()
+            .setLabel(`/${name}`)
+            .setValue(name)
+            .setDescription(TIER_LABELS[tier] ?? tier)
+    );
+
     return [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('commands_toggle')
-                .setPlaceholder('Select a command to enable/disable...')
-                .addOptions(options)
+        row(new StringSelectMenuBuilder()
+            .setCustomId('perm_cmd_select')
+            .setPlaceholder('Select a command to manage permissions for...')
+            .addOptions(opts)),
+        row(
+            btn('perm_prev', '◀ Prev', ButtonStyle.Secondary).setDisabled(page === 0),
+            btn('perm_page', `${page + 1}/${totalPages}`, ButtonStyle.Primary).setDisabled(true),
+            btn('perm_next', 'Next ▶', ButtonStyle.Secondary).setDisabled(page >= totalPages - 1),
+            btn('panel_back', '← Back', ButtonStyle.Danger),
         ),
-        backRow(),
     ];
 }
 
-function presenceStatusRows() {
+// State 2: manage roles for selected command
+function permsDetailRows() {
     return [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('presence_status_select')
-                .setPlaceholder('Choose a status...')
-                .addOptions(
-                    Object.entries(STATUS_LABELS).map(([val, label]) =>
-                        new StringSelectMenuOptionBuilder()
-                            .setLabel(label)
-                            .setValue(val)
-                            .setEmoji(val === 'online' ? '🟢' : val === 'idle' ? '🌙' : val === 'dnd' ? '🔴' : '⚫')
-                    )
-                )
+        row(new RoleSelectMenuBuilder()
+            .setCustomId('perm_role_select')
+            .setPlaceholder('Select a role...')),
+        row(
+            btn('perm_add_role',  '✅ Add Role',   ButtonStyle.Success),
+            btn('perm_rem_role',  '❌ Remove Role', ButtonStyle.Danger),
+            btn('perm_clear_all', '🗑 Clear All',   ButtonStyle.Danger),
+            btn('perm_back_cmd',  '← Commands',    ButtonStyle.Secondary),
         ),
-        backRow(),
     ];
 }
 
-function presenceActTypeRows() {
-    return [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('presence_acttype_select')
-                .setPlaceholder('Choose activity type...')
-                .addOptions(
-                    Object.entries(ACTIVITY_TYPE).map(([val, label]) =>
-                        new StringSelectMenuOptionBuilder()
-                            .setLabel(label)
-                            .setValue(String(val))
-                    )
-                )
-        ),
-        backRow(),
-    ];
-}
-
-// ─── MODAL BUILDERS ──────────────────────────────────────────────────────────
+// ── Modal builders ────────────────────────────────────────────────────────────
 
 function actTextModal() {
     const current = botConfig.presence.activities?.[0]?.name ?? '';
     return new ModalBuilder()
         .setCustomId('modal_acttext')
         .setTitle('Edit Activity Text')
-        .addComponents(row(
-            new TextInputBuilder()
-                .setCustomId('acttext')
-                .setLabel('Activity Text (shown under bot name)')
-                .setStyle(TextInputStyle.Short)
-                .setValue(current)
-                .setMaxLength(128)
-                .setRequired(true)
-        ));
+        .addComponents(row(input('acttext', 'Activity text shown under bot name', current).setMaxLength(128)));
 }
 
 function footerModal() {
     return new ModalBuilder()
         .setCustomId('modal_footer')
         .setTitle('Edit Footer Text')
-        .addComponents(row(
-            new TextInputBuilder()
-                .setCustomId('footer')
-                .setLabel('Footer text shown in all embeds')
-                .setStyle(TextInputStyle.Short)
-                .setValue(botConfig.embeds.footer.text ?? 'Zero Bot')
-                .setMaxLength(100)
-                .setRequired(true)
-        ));
+        .addComponents(row(input('footer', 'Footer text shown in all embeds', botConfig.embeds.footer.text ?? 'Zero Bot').setMaxLength(100)));
 }
 
 function mainColorsModal() {
@@ -453,7 +531,7 @@ function mainColorsModal() {
         .setTitle('Edit Main Colors')
         .addComponents(
             row(input('col_primary',   'Primary Color (#RRGGBB)',   c.primary   ?? '#FFD700')),
-            row(input('col_secondary', 'Secondary Color (#RRGGBB)', c.secondary ?? '#000000')),
+            row(input('col_secondary', 'Secondary Color (#RRGGBB)', c.secondary ?? '#2F3136')),
         );
 }
 
@@ -476,9 +554,9 @@ function currencyModal() {
         .setCustomId('modal_currency')
         .setTitle('Edit Currency')
         .addComponents(
-            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',    c.symbol     ?? '£')),
-            row(input('cur_name',   'Name singular (e.g. coin)', c.name       ?? 'coins')),
-            row(input('cur_plural', 'Name plural (e.g. coins)',  c.namePlural ?? 'coins')),
+            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',      c.symbol     ?? '£')),
+            row(input('cur_name',   'Name singular (e.g. coin)',  c.name       ?? 'coin')),
+            row(input('cur_plural', 'Name plural (e.g. coins)',   c.namePlural ?? 'coins')),
         );
 }
 
@@ -490,7 +568,7 @@ function balancesModal() {
         .addComponents(
             row(input('bal_start', 'Starting Balance',    String(e.startingBalance  ?? 50))),
             row(input('bal_daily', 'Daily Reward Amount', String(e.dailyAmount      ?? 100))),
-            row(input('bal_bank',  'Bank Capacity',       String(e.baseBankCapacity ?? 100000))),
+            row(input('bal_bank',  'Bank Capacity',       String(e.baseBankCapacity ?? 100_000))),
         );
 }
 
@@ -513,8 +591,8 @@ function robModal() {
         .setCustomId('modal_rob')
         .setTitle('Edit Rob & Jail Settings')
         .addComponents(
-            row(input('rob_rate', 'Rob Success Rate (0.0 – 1.0)',  String(e.robSuccessRate ?? 0.4))),
-            row(input('rob_jail', 'Jail Time on Failure (minutes)', String((e.robFailJailTime ?? 3600000) / 60000))),
+            row(input('rob_rate', 'Rob Success Rate (0.0 – 1.0)', String(e.robSuccessRate ?? 0.4))),
+            row(input('rob_jail', 'Jail Time on failure (minutes)', String((e.robFailJailTime ?? 3_600_000) / 60_000))),
         );
 }
 
@@ -524,27 +602,24 @@ function giveawayModal() {
         .setCustomId('modal_giveaway')
         .setTitle('Edit Giveaway Defaults')
         .addComponents(
-            row(input('gv_hours',  'Default Duration (hours)', String(g.defaultDuration / 3_600_000 ?? 24))),
-            row(input('gv_minwin', 'Minimum Winners',          String(g.minimumWinners ?? 1))),
-            row(input('gv_maxwin', 'Maximum Winners',          String(g.maximumWinners ?? 10))),
+            row(input('gv_hours',  'Default Duration (hours)',  String(g.defaultDuration / 3_600_000 ?? 24))),
+            row(input('gv_minwin', 'Minimum Winners',           String(g.minimumWinners ?? 1))),
+            row(input('gv_maxwin', 'Maximum Winners',           String(g.maximumWinners ?? 10))),
         );
 }
 
-
 function welcomeModal(type) {
+    const w = botConfig.welcome;
     const isWelcome = type === 'welcome';
-    const current = isWelcome
-        ? botConfig.welcome?.defaultWelcomeMessage ?? 'Welcome {user} to {server}!'
-        : botConfig.welcome?.defaultGoodbyeMessage ?? 'Goodbye {user}, we hope to see you again!';
     return new ModalBuilder()
         .setCustomId(isWelcome ? 'modal_welcome_msg' : 'modal_goodbye_msg')
         .setTitle(isWelcome ? 'Edit Welcome Message' : 'Edit Goodbye Message')
         .addComponents(row(
             new TextInputBuilder()
                 .setCustomId('msg')
-                .setLabel('Message (use {user} {server} {memberCount})')
+                .setLabel(isWelcome ? 'Welcome message ({user} {server} {memberCount})' : 'Goodbye message ({user} {memberCount})')
                 .setStyle(TextInputStyle.Paragraph)
-                .setValue(current)
+                .setValue(isWelcome ? (w.defaultWelcomeMessage ?? '') : (w.defaultGoodbyeMessage ?? ''))
                 .setMaxLength(500)
                 .setRequired(true)
         ));
@@ -554,31 +629,10 @@ function cooldownModal() {
     return new ModalBuilder()
         .setCustomId('modal_cooldown')
         .setTitle('Edit Default Cooldown')
-        .addComponents(row(
-            new TextInputBuilder()
-                .setCustomId('cooldown_secs')
-                .setLabel('Cooldown in seconds (e.g. 5)')
-                .setStyle(TextInputStyle.Short)
-                .setValue(String(botConfig.commands?.defaultCooldown ?? 3))
-                .setMaxLength(4)
-                .setRequired(true)
-        ));
+        .addComponents(row(input('cooldown_secs', 'Cooldown in seconds (0 = no cooldown)', String(botConfig.commands.defaultCooldown ?? 3)).setMaxLength(4)));
 }
 
-
-function commandsEmbed(client) {
-    const guildConfig = null; // will be loaded dynamically
-    return createEmbed({
-        title: '🚫 Command Toggles',
-        description: 'Use the select menu to disable or re-enable any command in this server.\n' +
-            'Disabled commands show an error to users when they try to use them.',
-        color: 'primary',
-        footer: { text: 'Server owners & admins can always use all commands' },
-        timestamp: true,
-    });
-}
-
-// ─── PAGE MAP ─────────────────────────────────────────────────────────────────
+// ── getPage helper ────────────────────────────────────────────────────────────
 function getPage(pageId) {
     switch (pageId) {
         case 'main':           return { embed: mainEmbed(),     rows: mainRows() };
@@ -590,12 +644,14 @@ function getPage(pageId) {
         case 'panel_welcome':  return { embed: welcomeEmbed(),  rows: welcomeRows() };
         case 'panel_cooldown': return { embed: cooldownEmbed(), rows: cooldownRows() };
         case 'panel_status':   return { embed: statusEmbed(),   rows: statusRows() };
-        case 'panel_commands': return null; // handled dynamically
+        // panel_commands and panel_perms are handled dynamically (need client/guildId)
         default:               return null;
     }
 }
 
-// ─── EXECUTE ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMMAND EXPORT
+// ═══════════════════════════════════════════════════════════════════════════════
 export default {
     data: new SlashCommandBuilder()
         .setName('panel')
@@ -622,7 +678,13 @@ export default {
         const { embed, rows } = getPage('main');
         const msg = await interaction.editReply({ embeds: [embed], components: rows });
 
-        // ── Component collector (buttons + select menus) ──────────────────────
+        // ── Pagination / selection state ──────────────────────────────────────
+        let cmdPage         = 0; // Commands page
+        let permPage        = 0; // Permissions command-list page
+        let permSelectedCmd = null; // Currently selected command in Permissions
+        let permSelectedRole= null; // Role picked from RoleSelectMenu
+
+        // ── Component collector ───────────────────────────────────────────────
         const collector = msg.createMessageComponentCollector({
             filter: i => i.user.id === interaction.user.id,
             time: PANEL_TIMEOUT,
@@ -632,42 +694,232 @@ export default {
             try {
                 const id = i.customId;
 
-                // ── Back button ────────────────────────────────────────────────
+                // ── Back → main menu ───────────────────────────────────────────
                 if (id === 'panel_back') {
                     await i.deferUpdate();
+                    permSelectedCmd  = null;
+                    permSelectedRole = null;
                     const page = getPage('main');
                     return i.editReply({ embeds: [page.embed], components: page.rows });
                 }
 
-                // ── Category navigation buttons ────────────────────────────────
-                if (getPage(id)) {
+                // ── Category navigation ────────────────────────────────────────
+                const staticPage = getPage(id);
+                if (staticPage) {
                     await i.deferUpdate();
-                    const page = getPage(id);
-                    return i.editReply({ embeds: [page.embed], components: page.rows });
+                    return i.editReply({ embeds: [staticPage.embed], components: staticPage.rows });
                 }
 
-
-                // ── Commands page ──────────────────────────────────────────────
+                // ── Commands page entry ────────────────────────────────────────
                 if (id === 'panel_commands') {
                     await i.deferUpdate();
+                    cmdPage = 0;
                     const configKey = `guild:${interaction.guildId}:config`;
                     let guildCfg = {};
                     try { guildCfg = await getFromDb(configKey, {}); } catch {}
-                    return i.editReply({ embeds: [commandsEmbed(client)], components: commandsRows(client, guildCfg.disabledCommands ?? {}) });
+                    const disabled = guildCfg.disabledCommands ?? {};
+                    const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
+                    return i.editReply({
+                        embeds:     [commandsEmbed(client, cmdPage, totalPages)],
+                        components: commandsRows(client, disabled, cmdPage),
+                    });
                 }
 
-                // ── Presence: sub-nav buttons ──────────────────────────────────
+                // ── Commands: pagination ───────────────────────────────────────
+                if (id === 'cmds_prev' || id === 'cmds_next') {
+                    await i.deferUpdate();
+                    if (id === 'cmds_prev') cmdPage--;
+                    else                    cmdPage++;
+                    const configKey = `guild:${interaction.guildId}:config`;
+                    let guildCfg = {};
+                    try { guildCfg = await getFromDb(configKey, {}); } catch {}
+                    const disabled = guildCfg.disabledCommands ?? {};
+                    const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
+                    return i.editReply({
+                        embeds:     [commandsEmbed(client, cmdPage, totalPages)],
+                        components: commandsRows(client, disabled, cmdPage),
+                    });
+                }
+
+                // ── Commands: toggle a command ─────────────────────────────────
+                if (id === 'commands_toggle') {
+                    await i.deferUpdate();
+                    const cmdName   = i.values[0];
+                    const configKey = `guild:${interaction.guildId}:config`;
+                    let guildCfg = {};
+                    try { guildCfg = await getFromDb(configKey, {}); } catch {}
+                    if (!guildCfg.disabledCommands) guildCfg.disabledCommands = {};
+                    const wasDisabled = guildCfg.disabledCommands[cmdName];
+                    if (wasDisabled) delete guildCfg.disabledCommands[cmdName];
+                    else             guildCfg.disabledCommands[cmdName] = true;
+                    await setInDb(configKey, guildCfg);
+                    const disabled   = guildCfg.disabledCommands;
+                    const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
+                    const statusEmb  = createEmbed({
+                        title:       '🚫 Command Toggles',
+                        description: `Command \`/${cmdName}\` is now **${wasDisabled ? '✅ enabled' : '🚫 disabled'}**.\n\nUse the select menu to toggle more commands.`,
+                        color:       wasDisabled ? 'success' : 'error',
+                        footer:      { text: 'Server owners & admins can always use all commands' },
+                        timestamp:   true,
+                    });
+                    return i.editReply({
+                        embeds:     [statusEmb],
+                        components: commandsRows(client, disabled, cmdPage),
+                    });
+                }
+
+                // ════════════════════════════════════════════════════════════════
+                //  PERMISSIONS PAGE
+                // ════════════════════════════════════════════════════════════════
+
+                // ── Permissions page entry ─────────────────────────────────────
+                if (id === 'panel_perms') {
+                    await i.deferUpdate();
+                    permPage        = 0;
+                    permSelectedCmd = null;
+                    permSelectedRole= null;
+                    return i.editReply({
+                        embeds:     [await permissionsEmbed(interaction.guildId)],
+                        components: permsCmdSelectRows(permPage),
+                    });
+                }
+
+                // ── Permissions: paginate command list ─────────────────────────
+                if (id === 'perm_prev' || id === 'perm_next') {
+                    await i.deferUpdate();
+                    if (id === 'perm_prev') permPage--;
+                    else                    permPage++;
+                    permSelectedCmd  = null;
+                    permSelectedRole = null;
+                    return i.editReply({
+                        embeds:     [await permissionsEmbed(interaction.guildId)],
+                        components: permsCmdSelectRows(permPage),
+                    });
+                }
+
+                // ── Permissions: command selected ──────────────────────────────
+                if (id === 'perm_cmd_select') {
+                    await i.deferUpdate();
+                    permSelectedCmd  = i.values[0];
+                    permSelectedRole = null;
+                    const permKey    = `guild:${interaction.guildId}:cmd_perms`;
+                    const overrides  = await getFromDb(permKey, {});
+                    const roleIds    = overrides[permSelectedCmd] ?? [];
+                    const tier       = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    return i.editReply({
+                        embeds:     [permDetailEmbed(permSelectedCmd, roleIds, tier)],
+                        components: permsDetailRows(),
+                    });
+                }
+
+                // ── Permissions: role selected from RoleSelectMenu ─────────────
+                if (id === 'perm_role_select') {
+                    await i.deferUpdate();
+                    permSelectedRole = i.values[0]; // single role ID
+                    // Refresh detail embed (no visual change, just acknowledge)
+                    const permKey  = `guild:${interaction.guildId}:cmd_perms`;
+                    const overrides = await getFromDb(permKey, {});
+                    const roleIds  = overrides[permSelectedCmd] ?? [];
+                    const tier     = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    return i.editReply({
+                        embeds: [createEmbed({
+                            title:       `🔐 Permissions — \`/${permSelectedCmd}\``,
+                            description: [
+                                `**Default requirement:** ${TIER_LABELS[tier] ?? 'Unknown'}`,
+                                '',
+                                '**Allowed roles:**',
+                                roleIds.length > 0 ? roleIds.map(id => `<@&${id}>`).join(', ') : '_None set_',
+                                '',
+                                `**Selected role:** <@&${permSelectedRole}>`,
+                                'Click **Add Role** or **Remove Role** below.',
+                            ].join('\n'),
+                            color: 'info',
+                            timestamp: true,
+                        })],
+                        components: permsDetailRows(),
+                    });
+                }
+
+                // ── Permissions: add role ──────────────────────────────────────
+                if (id === 'perm_add_role') {
+                    await i.deferUpdate();
+                    if (!permSelectedCmd || !permSelectedRole) {
+                        return i.followUp({ content: '⚠️ Select a command and a role first.', flags: MessageFlags.Ephemeral });
+                    }
+                    const permKey   = `guild:${interaction.guildId}:cmd_perms`;
+                    const overrides = await getFromDb(permKey, {});
+                    if (!Array.isArray(overrides[permSelectedCmd])) overrides[permSelectedCmd] = [];
+                    if (!overrides[permSelectedCmd].includes(permSelectedRole)) {
+                        overrides[permSelectedCmd].push(permSelectedRole);
+                        await setInDb(permKey, overrides);
+                    }
+                    const tier = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    return i.editReply({
+                        embeds:     [permDetailEmbed(permSelectedCmd, overrides[permSelectedCmd], tier)],
+                        components: permsDetailRows(),
+                    });
+                }
+
+                // ── Permissions: remove role ───────────────────────────────────
+                if (id === 'perm_rem_role') {
+                    await i.deferUpdate();
+                    if (!permSelectedCmd || !permSelectedRole) {
+                        return i.followUp({ content: '⚠️ Select a command and a role first.', flags: MessageFlags.Ephemeral });
+                    }
+                    const permKey   = `guild:${interaction.guildId}:cmd_perms`;
+                    const overrides = await getFromDb(permKey, {});
+                    if (Array.isArray(overrides[permSelectedCmd])) {
+                        overrides[permSelectedCmd] = overrides[permSelectedCmd].filter(id => id !== permSelectedRole);
+                        if (overrides[permSelectedCmd].length === 0) delete overrides[permSelectedCmd];
+                        await setInDb(permKey, overrides);
+                    }
+                    const roleIds = overrides[permSelectedCmd] ?? [];
+                    const tier    = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    return i.editReply({
+                        embeds:     [permDetailEmbed(permSelectedCmd, roleIds, tier)],
+                        components: permsDetailRows(),
+                    });
+                }
+
+                // ── Permissions: clear all roles for this command ──────────────
+                if (id === 'perm_clear_all') {
+                    await i.deferUpdate();
+                    if (!permSelectedCmd) {
+                        return i.followUp({ content: '⚠️ No command selected.', flags: MessageFlags.Ephemeral });
+                    }
+                    const permKey   = `guild:${interaction.guildId}:cmd_perms`;
+                    const overrides = await getFromDb(permKey, {});
+                    delete overrides[permSelectedCmd];
+                    await setInDb(permKey, overrides);
+                    const tier = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    return i.editReply({
+                        embeds:     [permDetailEmbed(permSelectedCmd, [], tier)],
+                        components: permsDetailRows(),
+                    });
+                }
+
+                // ── Permissions: back to command list ──────────────────────────
+                if (id === 'perm_back_cmd') {
+                    await i.deferUpdate();
+                    permSelectedCmd  = null;
+                    permSelectedRole = null;
+                    return i.editReply({
+                        embeds:     [await permissionsEmbed(interaction.guildId)],
+                        components: permsCmdSelectRows(permPage),
+                    });
+                }
+
+                // ── Presence sub-nav ───────────────────────────────────────────
                 if (id === 'presence_status') {
                     await i.deferUpdate();
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceStatusRows() });
                 }
-
                 if (id === 'presence_acttype') {
                     await i.deferUpdate();
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceActTypeRows() });
                 }
 
-                // ── Presence: status select ────────────────────────────────────
+                // ── Presence selects ───────────────────────────────────────────
                 if (id === 'presence_status_select') {
                     await i.deferUpdate();
                     const newStatus = i.values[0];
@@ -675,52 +927,23 @@ export default {
                     try { client.user.setStatus(newStatus); } catch { /* ignore */ }
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
                 }
-
-                // ── Presence: activity type select ─────────────────────────────
                 if (id === 'presence_acttype_select') {
                     await i.deferUpdate();
-                    const newType = Number(i.values[0]);
+                    const newType    = Number(i.values[0]);
                     const activities = botConfig.presence.activities ?? [{}];
-                    activities[0] = { ...activities[0], type: newType };
+                    activities[0]    = { ...activities[0], type: newType };
                     await persist('presence.activities', activities);
                     try { client.user.setActivity(activities[0].name, { type: newType }); } catch { /* ignore */ }
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
                 }
 
-                // ── Features: toggle select ────────────────────────────────────
+                // ── Features toggle ────────────────────────────────────────────
                 if (id === 'features_toggle') {
                     await i.deferUpdate();
-                    const key = i.values[0];
+                    const key     = i.values[0];
                     const current = botConfig.features[key];
                     await persist(`features.${key}`, !current);
                     return i.editReply({ embeds: [featuresEmbed()], components: featuresRows() });
-                }
-
-
-                // ── Commands: toggle select ────────────────────────────────────
-                if (id === 'commands_toggle') {
-                    await i.deferUpdate();
-                    const cmdName = i.values[0];
-                    const configKey = `guild:${interaction.guildId}:config`;
-                    let guildCfg = {};
-                    try { guildCfg = await getFromDb(configKey, {}); } catch {}
-                    if (!guildCfg.disabledCommands) guildCfg.disabledCommands = {};
-                    const wasDisabled = guildCfg.disabledCommands[cmdName];
-                    if (wasDisabled) {
-                        delete guildCfg.disabledCommands[cmdName];
-                    } else {
-                        guildCfg.disabledCommands[cmdName] = true;
-                    }
-                    await setInDb(configKey, guildCfg);
-                    const embed = createEmbed({
-                        title: '🚫 Command Toggles',
-                        description: `Command \`/${cmdName}\` is now **${wasDisabled ? '✅ enabled' : '🚫 disabled'}**.\n\n` +
-                            'Use the select menu to toggle more commands.',
-                        color: wasDisabled ? 'success' : 'error',
-                        footer: { text: 'Server owners & admins can always use all commands' },
-                        timestamp: true,
-                    });
-                    return i.editReply({ embeds: [embed], components: commandsRows(client, guildCfg.disabledCommands) });
                 }
 
                 // ── Modal-opening buttons ──────────────────────────────────────
@@ -738,7 +961,6 @@ export default {
                     'wlc_goodbye':      welcomeModal('goodbye'),
                     'cd_edit':          cooldownModal(),
                 };
-
                 if (modalMap[id]) {
                     return i.showModal(modalMap[id]);
                 }
@@ -750,11 +972,8 @@ export default {
         });
 
         // ── Modal submission handler ───────────────────────────────────────────
-        // Modal submits can't use deferUpdate(), so we reply ephemerally
-        // then update the panel message directly via msg.edit()
         const onModal = async i => {
             if (!i.isModalSubmit() || i.user.id !== interaction.user.id) return;
-            // Only handle panel modals
             if (!i.customId.startsWith('modal_')) return;
 
             try {
@@ -847,7 +1066,7 @@ export default {
                         return i.reply({ content: '❌ Rob rate must be 0.0–1.0, jail time must be a number.', flags: MessageFlags.Ephemeral });
                     }
                     await persist('economy.robSuccessRate',  rate);
-                    await persist('economy.robFailJailTime', jail * 60000);
+                    await persist('economy.robFailJailTime', jail * 60_000);
                     await i.reply({ content: '✅ Rob & jail settings updated.', flags: MessageFlags.Ephemeral });
                     return msg.edit({ embeds: [economyEmbed()], components: economyRows() });
                 }
@@ -903,3 +1122,37 @@ export default {
         });
     },
 };
+
+// ─── presenceStatusRows / presenceActTypeRows (used in collector) ─────────────
+function presenceStatusRows() {
+    return [
+        row(new StringSelectMenuBuilder()
+            .setCustomId('presence_status_select')
+            .setPlaceholder('Choose a status...')
+            .addOptions(
+                Object.entries(STATUS_LABELS).map(([val, label]) =>
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(label)
+                        .setValue(val)
+                        .setEmoji(val === 'online' ? '🟢' : val === 'idle' ? '🌙' : val === 'dnd' ? '🔴' : '⚫')
+                )
+            )),
+        backRow(),
+    ];
+}
+
+function presenceActTypeRows() {
+    return [
+        row(new StringSelectMenuBuilder()
+            .setCustomId('presence_acttype_select')
+            .setPlaceholder('Choose activity type...')
+            .addOptions(
+                Object.entries(ACTIVITY_TYPE).map(([val, label]) =>
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(label)
+                        .setValue(String(val))
+                )
+            )),
+        backRow(),
+    ];
+}
