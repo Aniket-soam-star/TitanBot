@@ -1,8 +1,6 @@
-// 📁 NEW FILE → src/shortcuts/shortcutHandler.js
-//
-// Called from messageCreate.js when a message starts with ~
-// Looks up the shortcut, builds a fake interaction, checks permissions,
-// fetches guild config, then calls command.execute() exactly like a slash command.
+// src/shortcuts/shortcutHandler.js
+// Fix: Added hasCommandAccess check after building ShortcutInteraction so that
+// ~ shortcuts respect the same role-based permission system as slash commands.
 
 import { MessageFlags }          from 'discord.js';
 import { SHORTCUT_MAP, SHORTCUT_PREFIX } from './shortcutMap.js';
@@ -10,6 +8,7 @@ import { ShortcutInteraction }   from './ShortcutInteraction.js';
 import { getGuildConfig }        from '../services/guildConfig.js';
 import { createEmbed }           from '../utils/embeds.js';
 import { logger }                from '../utils/logger.js';
+import { hasCommandAccess }      from '../utils/roleGuard.js'; // ← ADDED
 
 // ─── Usage error embed ────────────────────────────────────────────────────────
 function usageEmbed(schema) {
@@ -58,8 +57,6 @@ export async function handleShortcut(message, client) {
     // Unknown shortcut — silently ignore if it could be a natural message starting
     // with ~ (e.g. ~_tilde in text). Only respond if it looks intentional.
     if (!schema) {
-        // Only reply if it looks like they're trying to use a command
-        // (starts with a letter and is short enough to be a command name)
         if (/^[a-z]{1,20}$/i.test(shortcut)) {
             await message.reply({ embeds: [unknownEmbed(shortcut)] });
         }
@@ -104,6 +101,18 @@ export async function handleShortcut(message, client) {
         });
     }
 
+    // ── Role Guard ────────────────────────────────────────────────────────────
+    // ShortcutInteraction exposes .guild / .member / .user from the message,
+    // so hasCommandAccess works exactly the same as for slash commands.
+    // Denial is handled inside hasCommandAccess (sends ephemeral-style reply).
+    try {
+        const allowed = await hasCommandAccess(interaction, schema.command);
+        if (!allowed) return;
+    } catch (err) {
+        logger.warn('[Shortcuts] Role guard check failed:', err.message);
+        // Fall through — if the guard crashes, still allow (fail-open)
+    }
+    // ── End Role Guard ────────────────────────────────────────────────────────
 
     // ── Guild config ──────────────────────────────────────────────────────────
     let guildConfig = null;
