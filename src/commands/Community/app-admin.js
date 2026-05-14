@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, PermissionsBitField, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, LabelBuilder, RoleSelectMenuBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, PermissionsBitField, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, RoleSelectMenuBuilder } from 'discord.js';
 import { createEmbed, errorEmbed, successEmbed } from '../../utils/embeds.js';
 import { getColor } from '../../config/bot.js';
 import { logger } from '../../utils/logger.js';
@@ -148,20 +148,10 @@ async function handleSetup(interaction) {
         });
     }
 
-    // Build modal using LabelBuilder API with a native role select dropdown
+    // Build modal for application setup
     const modal = new ModalBuilder()
         .setCustomId('app_setup_modal')
         .setTitle('Set Up New Application');
-
-    const roleSelect = new RoleSelectMenuBuilder()
-        .setCustomId('role_id')
-        .setPlaceholder('Select the role users will apply for')
-        .setRequired(true);
-
-    const roleLabel = new LabelBuilder()
-        .setLabel('Application Role')
-        .setDescription('The role that users will be applying for')
-        .setRoleSelectMenuComponent(roleSelect);
 
     const appNameInput = new TextInputBuilder()
         .setCustomId('app_name')
@@ -171,10 +161,6 @@ async function handleSetup(interaction) {
         .setMinLength(1)
         .setRequired(true);
 
-    const appNameLabel = new LabelBuilder()
-        .setLabel('Application Name')
-        .setTextInputComponent(appNameInput);
-
     const q1Input = new TextInputBuilder()
         .setCustomId('app_question_1')
         .setStyle(TextInputStyle.Short)
@@ -183,10 +169,6 @@ async function handleSetup(interaction) {
         .setMinLength(1)
         .setRequired(true);
 
-    const q1Label = new LabelBuilder()
-        .setLabel('Question 1 (required)')
-        .setTextInputComponent(q1Input);
-
     const q2Input = new TextInputBuilder()
         .setCustomId('app_question_2')
         .setStyle(TextInputStyle.Short)
@@ -194,21 +176,18 @@ async function handleSetup(interaction) {
         .setMaxLength(100)
         .setRequired(false);
 
-    const q2Label = new LabelBuilder()
-        .setLabel('Question 2 (optional)')
-        .setTextInputComponent(q2Input);
-
     const q3Input = new TextInputBuilder()
         .setCustomId('app_question_3')
         .setStyle(TextInputStyle.Short)
         .setMaxLength(100)
         .setRequired(false);
 
-    const q3Label = new LabelBuilder()
-        .setLabel('Question 3 (optional)')
-        .setTextInputComponent(q3Input);
-
-    modal.addLabelComponents(roleLabel, appNameLabel, q1Label, q2Label, q3Label);
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(appNameInput),
+        new ActionRowBuilder().addComponents(q1Input),
+        new ActionRowBuilder().addComponents(q2Input),
+        new ActionRowBuilder().addComponents(q3Input),
+    );
 
     await interaction.showModal(modal);
 
@@ -225,13 +204,44 @@ async function handleSetup(interaction) {
     }
 
     const appName = submitted.fields.getTextInputValue('app_name').trim();
-    const selectedRoles = submitted.fields.getSelectedRoles('role_id');
-    const roleId = selectedRoles.first()?.id;
+
+    // Ask for role via a separate role select menu (can't do this in modals)
+    await submitted.reply({
+        embeds: [createEmbed({
+            title: '🎭 Select a Role',
+            description: `Now select the role users will receive when their **${appName}** application is approved.`,
+            color: 'info',
+        })],
+        components: [
+            new ActionRowBuilder().addComponents(
+                new RoleSelectMenuBuilder()
+                    .setCustomId('app_setup_role_select')
+                    .setPlaceholder('Select the role for this application...')
+            )
+        ],
+        flags: ['Ephemeral'],
+    });
+
+    const roleMsg = await submitted.fetchReply();
+    const roleCollector = roleMsg.createMessageComponentCollector({
+        time: 60_000,
+        max: 1,
+    });
+
+    const roleId = await new Promise((resolve) => {
+        roleCollector.on('collect', async ri => {
+            await ri.deferUpdate();
+            resolve(ri.values[0]);
+        });
+        roleCollector.on('end', (col) => {
+            if (col.size === 0) resolve(null);
+        });
+    });
 
     if (!roleId) {
-        await submitted.reply({
-            embeds: [errorEmbed('No Role Selected', 'You must select a role for the application.')],
-            flags: ['Ephemeral'],
+        await submitted.editReply({
+            embeds: [errorEmbed('Timed Out', 'No role was selected. Please run the command again.')],
+            components: [],
         });
         return;
     }
@@ -288,10 +298,8 @@ async function handleSetup(interaction) {
         flags: ['Ephemeral'],
     });
 
-    // Auto-open dashboard with this app selected
-    setTimeout(() => {
-        appDashboard.execute(submitted, null, interaction.client, appName);
-    }, 500);
+    // Auto-open dashboard is skipped here since we've already used multiple replies
+    // User can run /app-admin dashboard to manage the new application
 }
 
 
@@ -355,6 +363,8 @@ async function handleReview(interaction) {
     });
 
     // Setup button collector
+    if (!interaction.channel) return;
+
     const collector = interaction.channel.createMessageComponentCollector({
         componentType: ComponentType.Button,
         filter: i =>
