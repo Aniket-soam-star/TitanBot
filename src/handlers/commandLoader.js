@@ -30,28 +30,7 @@ const __dirname  = path.dirname(__filename);
 // These are still LOADED and work if you test in guild-mode or add them back
 // by removing other commands to create space.
 const LOW_PRIORITY_COMMANDS = new Set([
-    // Core — redundant or niche
-    'overview',
-    // Utility — niche
-    'firstmsg',
-    'report',
-    // Economy — nice-to-have but not essential
-    'eleaderboard',
-    'shop',
-    'buy',
-    'inventory',
-    'crime',
-    'slut',
-    'beg',
-    // Standalone feature modules
-    'birthday',
-    'apply',
-    'app-admin',
-    'jointocreate',
-    'serverstats',
-    'activity',
-    'logging',
-    'reactroles',
+    // All 100 commands fit within Discord's limit — nothing is deprioritised.
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
