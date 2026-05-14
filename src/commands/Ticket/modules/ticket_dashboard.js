@@ -211,6 +211,9 @@ export default {
             const replyMessage = await interaction.fetchReply().catch(() => null);
             const replyMessageId = replyMessage?.id;
 
+            if (!interaction.channel) return;
+
+
             const collector = interaction.channel.createMessageComponentCollector({
                 componentType: ComponentType.StringSelect,
                 filter: i =>
