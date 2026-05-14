@@ -14,8 +14,6 @@ import {
     ComponentType,
     ChannelType,
     EmbedBuilder,
-    LabelBuilder,
-    RadioGroupBuilder,
 } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { successEmbed, errorEmbed } from '../../utils/embeds.js';
