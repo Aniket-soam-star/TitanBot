@@ -437,7 +437,6 @@ export const botConfig = {
   features: {
     // Core systems.
     economy: true,
-    leveling: false,
     moderation: true,
     logging: true,
     welcome: true,
@@ -454,8 +453,6 @@ export const botConfig = {
     joinToCreate: true,
 
     // Utility/quality-of-life modules.
-    voice: true,
-    search: true,
     tools: true,
     utility: true,
     community: true,
