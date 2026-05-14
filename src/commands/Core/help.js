@@ -26,23 +26,17 @@ const CATEGORY_ICONS = {
     Moderation: "🛡️",
     Economy: "💰",
     Fun: "🎮",
-    Leveling: "📊",
     Utility: "🔧",
     Ticket: "🎫",
     Welcome: "👋",
     Giveaway: "🎉",
     Counter: "🔢",
     Tools: "🛠️",
-    Search: "🔍",
     Reaction_Roles: "🎭",
     Community: "👥",
     Birthday: "🎂",
     Config: "⚙️",
 };
-
-
-
-
 
 export async function createInitialHelpMenu(client) {
     const commandsPath = path.join(__dirname, "../../commands");
@@ -93,11 +87,6 @@ export async function createInitialHelpMenu(client) {
         {
             name: "🎮 **Fun**",
             value: "Games, entertainment, and interactive commands",
-            inline: true
-        },
-        {
-            name: "📊 **Leveling**",
-            value: "User levels, XP system, and progression tracking",
             inline: true
         },
         {
@@ -230,5 +219,4 @@ export default {
         }, HELP_MENU_TIMEOUT_MS);
     },
 };
-
 

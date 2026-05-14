@@ -1,14 +1,3 @@
-// 📁 REPLACE → src/commands/Core/panel.js
-//
-// Changes vs previous version:
-//   1. Added 🔐 Permissions page — select a command, pick roles via Discord's
-//      native role selector. Reads/writes guild:{guildId}:cmd_perms (same key
-//      that roleGuard.js and /botconfig permissions use).
-//   2. Fixed commandsRows — now paginated so all commands are reachable,
-//      not just the first 25.
-//   3. mainRows: moved Commands + added Permissions into a third row.
-//   4. RoleSelectMenuBuilder imported for native role picking (no typing IDs).
-
 import {
     SlashCommandBuilder,
     PermissionFlagsBits,
@@ -24,24 +13,27 @@ import {
     TextInputStyle,
 } from 'discord.js';
 import { createEmbed } from '../../utils/embeds.js';
-import { getFromDb, setInDb } from '../../utils/database.js';
+import { getFromDb, setInDb, getWelcomeConfig, saveWelcomeConfig } from '../../utils/database.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { logger } from '../../utils/logger.js';
 import { botConfig } from '../../config/bot.js';
 import { COMMAND_TIERS, TIERS, TIER_LABELS } from '../../utils/roleGuard.js';
 
-// ─── DB helpers ──────────────────────────────────────────────────────────────
-const DB_KEY      = 'zerobot:global:config';
-const PERMS_PER_PAGE = 24;  // Discord StringSelectMenu max = 25; leave 1 for safety
+// ─── DB helpers ───────────────────────────────────────────────────────────────
+// Global bot config (presence, branding, economy, features, giveaway, cooldown)
+// These are intentionally bot-wide — one bot instance shares one config.
+// They survive restarts because ready.js loads them back from this key.
+const GLOBAL_KEY = 'zerobot:global:config';
+
+const PERMS_PER_PAGE = 24;
 const CMDS_PER_PAGE  = 24;
+const PANEL_TIMEOUT  = 10 * 60 * 1000;
 
-async function loadOverrides()     { return getFromDb(DB_KEY, {}); }
-async function saveKey(key, value) {
-    const ov = await loadOverrides();
-    ov[key]  = value;
-    await setInDb(DB_KEY, ov);
-}
+async function loadGlobal()        { return getFromDb(GLOBAL_KEY, {}); }
+async function saveGlobal(ov)      { await setInDb(GLOBAL_KEY, ov); }
 
+// Mutate the live botConfig object so changes take effect immediately
+// without restarting, AND save to DB so they survive restarts.
 function applyLive(dotKey, value) {
     try {
         const parts = dotKey.split('.');
@@ -56,7 +48,9 @@ function applyLive(dotKey, value) {
 
 async function persist(dotKey, value) {
     applyLive(dotKey, value);
-    await saveKey(dotKey, value);
+    const ov = await loadGlobal();
+    ov[dotKey] = value;
+    await saveGlobal(ov);
 }
 
 // All non-PUBLIC commands sorted alphabetically — used by Permissions page
@@ -65,17 +59,15 @@ const NON_PUBLIC_CMDS = Object.entries(COMMAND_TIERS)
     .map(([name, tier]) => ({ name, tier }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-// ─── Small helpers ─────────────────────────────────────────────────────────────
-const PANEL_TIMEOUT  = 10 * 60 * 1000;
-const STATUS_LABELS  = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
-const ACTIVITY_TYPE  = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
-const fmt            = v => `\`${v}\``;
-const isHex          = s => /^#[0-9A-Fa-f]{6}$/.test(s);
+// ─── Small helpers ────────────────────────────────────────────────────────────
+const STATUS_LABELS = { online: '🟢 Online', idle: '🌙 Idle', dnd: '🔴 Do Not Disturb', invisible: '⚫ Invisible' };
+const ACTIVITY_TYPE = { 0: 'Playing', 1: 'Streaming', 2: 'Listening to', 3: 'Watching', 5: 'Competing in' };
+const fmt   = v => `\`${v}\``;
+const isHex = s => /^#[0-9A-Fa-f]{6}$/.test(s);
 
 function btn(id, label, style = ButtonStyle.Primary) {
     return new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
 }
-
 function input(customId, label, value = '') {
     return new TextInputBuilder()
         .setCustomId(customId)
@@ -84,35 +76,33 @@ function input(customId, label, value = '') {
         .setValue(String(value).slice(0, 100))
         .setRequired(true);
 }
-
 function row(...components) {
     return new ActionRowBuilder().addComponents(...components);
 }
-
 function isOwner(interaction) {
     return interaction.guild?.ownerId === interaction.user.id
         || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
 }
 
-// ─── EMBED BUILDERS ──────────────────────────────────────────────────────────
+// ─── EMBED BUILDERS ───────────────────────────────────────────────────────────
 
 function mainEmbed() {
     return createEmbed({
         title: '⚙️ Zero Bot — Configuration Panel',
         description: [
             'Welcome to the bot configuration panel.',
-            'Select a category below to view and edit its settings.',
+            'Select a category below to view and edit settings.',
             '',
             '🟢 **Presence**     •  How the bot appears in the member list',
             '🎨 **Branding**     •  Embed colors and footer text',
             '💰 **Economy**      •  Currency, balances, work and rob settings',
             '🧩 **Features**     •  Enable or disable feature modules',
             '🎁 **Giveaway**     •  Default duration and winner limits',
-            '🌐 **Welcome**      •  Join and leave message templates',
+            '🌐 **Welcome**      •  Per-server join and leave message templates',
             '⏱️ **Cooldown**    •  Default command cooldown',
             '📊 **Status**       •  View all current settings at a glance',
-            '🚫 **Commands**     •  Enable / disable individual commands',
-            '🔐 **Permissions**  •  Set which roles can use which commands',
+            '🚫 **Commands**     •  Enable / disable individual commands per server',
+            '🔐 **Permissions**  •  Set which roles can use which commands per server',
         ].join('\n'),
         color: 'primary',
         footer: { text: 'Changes apply immediately • Panel times out after 10 minutes' },
@@ -128,11 +118,11 @@ function presenceEmbed() {
         description: 'Configure how the bot appears in Discord\'s member list.',
         color: 'primary',
         fields: [
-            { name: '🔘 Status',        value: STATUS_LABELS[p.status] ?? p.status, inline: true },
-            { name: '🎮 Activity Type', value: ACTIVITY_TYPE[act?.type] ?? 'Playing', inline: true },
-            { name: '📝 Activity Text', value: fmt(act?.name ?? 'N/A'), inline: false },
+            { name: '🔘 Status',        value: STATUS_LABELS[p.status] ?? p.status,        inline: true },
+            { name: '🎮 Activity Type', value: ACTIVITY_TYPE[act?.type] ?? 'Playing',       inline: true },
+            { name: '📝 Activity Text', value: fmt(act?.name ?? 'N/A'),                     inline: false },
         ],
-        footer: { text: 'Use the buttons below to edit each field' },
+        footer: { text: 'Presence is bot-wide (affects all servers)' },
         timestamp: true,
     });
 }
@@ -146,14 +136,14 @@ function brandingEmbed() {
         color: 'primary',
         fields: [
             { name: '📝 Footer Text', value: fmt(f.text ?? 'Zero Bot'), inline: false },
-            { name: '🎨 Primary',     value: fmt(c.primary),   inline: true },
-            { name: '✅ Success',     value: fmt(c.success),   inline: true },
-            { name: '❌ Error',       value: fmt(c.error),     inline: true },
-            { name: '⚠️ Warning',    value: fmt(c.warning),   inline: true },
-            { name: 'ℹ️ Info',       value: fmt(c.info),      inline: true },
-            { name: '🔵 Secondary',  value: fmt(c.secondary), inline: true },
+            { name: '🎨 Primary',     value: fmt(c.primary),            inline: true },
+            { name: '✅ Success',     value: fmt(c.success),            inline: true },
+            { name: '❌ Error',       value: fmt(c.error),              inline: true },
+            { name: '⚠️ Warning',    value: fmt(c.warning),            inline: true },
+            { name: 'ℹ️ Info',       value: fmt(c.info),               inline: true },
+            { name: '🔵 Secondary',  value: fmt(c.secondary),          inline: true },
         ],
-        footer: { text: 'Colors must be in #RRGGBB format' },
+        footer: { text: 'Colors must be in #RRGGBB format • Branding is bot-wide' },
         timestamp: true,
     });
 }
@@ -166,14 +156,15 @@ function economyEmbed() {
         color: 'primary',
         fields: [
             { name: '🪙 Currency',     value: `${fmt(e.currency.symbol)}  Name: ${fmt(e.currency.name)} / ${fmt(e.currency.namePlural)}`, inline: false },
-            { name: '💵 Starting Bal', value: fmt(e.startingBalance),  inline: true },
-            { name: '🎁 Daily Amount', value: fmt(e.dailyAmount),       inline: true },
-            { name: '🏦 Bank Cap',     value: fmt(e.baseBankCapacity),  inline: true },
-            { name: '⚒️ Work Range',  value: `${fmt(e.workMin)} – ${fmt(e.workMax)}`, inline: true },
-            { name: '🙏 Beg Range',   value: `${fmt(e.begMin)} – ${fmt(e.begMax)}`,  inline: true },
-            { name: '🦹 Rob Rate',    value: fmt(e.robSuccessRate * 100 + '%'),       inline: true },
-            { name: '⛓️ Jail Time',  value: fmt(e.robFailJailTime / 60000 + ' min'), inline: true },
+            { name: '💵 Starting Bal', value: fmt(e.startingBalance),                         inline: true },
+            { name: '🎁 Daily Amount', value: fmt(e.dailyAmount),                              inline: true },
+            { name: '🏦 Bank Cap',     value: fmt(e.baseBankCapacity),                         inline: true },
+            { name: '⚒️ Work Range',  value: `${fmt(e.workMin)} – ${fmt(e.workMax)}`,          inline: true },
+            { name: '🙏 Beg Range',   value: `${fmt(e.begMin)} – ${fmt(e.begMax)}`,            inline: true },
+            { name: '🦹 Rob Rate',    value: fmt(e.robSuccessRate * 100 + '%'),                 inline: true },
+            { name: '⛓️ Jail Time',  value: fmt(e.robFailJailTime / 60000 + ' min'),           inline: true },
         ],
+        footer: { text: 'Economy settings are bot-wide' },
         timestamp: true,
     });
 }
@@ -185,7 +176,7 @@ function featuresEmbed() {
         title: '🧩 Feature Toggles',
         description: 'Select a feature from the dropdown to toggle it on or off.\n\n' + lines.join('\n'),
         color: 'primary',
-        footer: { text: 'Changes apply immediately without restart' },
+        footer: { text: 'Feature toggles are bot-wide • Changes apply immediately' },
         timestamp: true,
     });
 }
@@ -198,23 +189,31 @@ function giveawayEmbed() {
         color: 'primary',
         fields: [
             { name: '⏱️ Default Duration', value: fmt(g.defaultDuration / 3_600_000 + ' hours'), inline: true },
-            { name: '🏆 Min Winners',       value: fmt(g.minimumWinners), inline: true },
-            { name: '🏆 Max Winners',       value: fmt(g.maximumWinners), inline: true },
+            { name: '🏆 Min Winners',       value: fmt(g.minimumWinners),                         inline: true },
+            { name: '🏆 Max Winners',       value: fmt(g.maximumWinners),                         inline: true },
         ],
+        footer: { text: 'Giveaway settings are bot-wide' },
         timestamp: true,
     });
 }
 
-function welcomeEmbed() {
-    const w = botConfig.welcome;
+// Welcome embed — shows the CURRENT per-guild config from DB
+function welcomeEmbed(cfg) {
+    const welcomeMsg = cfg?.welcomeMessage ?? botConfig.welcome.defaultWelcomeMessage;
+    const goodbyeMsg = cfg?.leaveMessage   ?? botConfig.welcome.defaultGoodbyeMessage;
+    const wChan      = cfg?.channelId      ? `<#${cfg.channelId}>` : '`Not set`';
+    const gChan      = cfg?.goodbyeChannelId ? `<#${cfg.goodbyeChannelId}>` : '`Not set`';
     return createEmbed({
         title: '🌐 Welcome Settings',
-        description: 'Configure join and leave message templates.\n\nPlaceholders: `{user}` `{server}` `{memberCount}`',
+        description: 'Edit this server\'s join and leave message templates.\n\nPlaceholders: `{user}` `{server}` `{memberCount}`',
         color: 'primary',
         fields: [
-            { name: '👋 Welcome Message', value: fmt(w.defaultWelcomeMessage), inline: false },
-            { name: '👋 Goodbye Message', value: fmt(w.defaultGoodbyeMessage), inline: false },
+            { name: '📢 Welcome Channel', value: wChan,                    inline: true },
+            { name: '📢 Goodbye Channel', value: gChan,                    inline: true },
+            { name: '👋 Welcome Message', value: fmt(welcomeMsg.length > 80 ? welcomeMsg.slice(0, 80) + '…' : welcomeMsg), inline: false },
+            { name: '👋 Goodbye Message', value: fmt(goodbyeMsg.length > 80 ? goodbyeMsg.slice(0, 80) + '…' : goodbyeMsg), inline: false },
         ],
+        footer: { text: 'Welcome settings are per-server' },
         timestamp: true,
     });
 }
@@ -227,26 +226,27 @@ function cooldownEmbed() {
         fields: [
             { name: '⏱️ Default Cooldown', value: fmt(botConfig.commands.defaultCooldown + ' seconds'), inline: true },
         ],
+        footer: { text: 'Cooldown setting is bot-wide' },
         timestamp: true,
     });
 }
 
 function statusEmbed() {
-    const p      = botConfig.presence;
-    const e      = botConfig.economy;
-    const f      = botConfig.features;
-    const act    = p.activities?.[0];
-    const featOn  = Object.entries(f).filter(([, v]) => v).map(([k]) => k).join(', ') || 'None';
+    const p     = botConfig.presence;
+    const e     = botConfig.economy;
+    const f     = botConfig.features;
+    const act   = p.activities?.[0];
+    const featOn  = Object.entries(f).filter(([, v]) =>  v).map(([k]) => k).join(', ') || 'None';
     const featOff = Object.entries(f).filter(([, v]) => !v).map(([k]) => k).join(', ') || 'None';
     return createEmbed({
         title: '📊 Current Configuration',
         color: 'info',
         fields: [
-            { name: '🟢 Presence',    value: `${STATUS_LABELS[p.status]} — ${ACTIVITY_TYPE[act?.type] ?? 'Playing'} ${act?.name}`, inline: false },
-            { name: '💰 Currency',    value: `${e.currency.symbol}${e.currency.name} | Start: ${e.startingBalance} | Daily: ${e.dailyAmount}`, inline: false },
-            { name: '⏱️ Cooldown',   value: fmt(botConfig.commands.defaultCooldown + 's'), inline: true },
-            { name: '📝 Footer',      value: fmt(botConfig.embeds.footer.text), inline: true },
-            { name: '✅ Features ON', value: featOn,  inline: false },
+            { name: '🟢 Presence',     value: `${STATUS_LABELS[p.status]} — ${ACTIVITY_TYPE[act?.type] ?? 'Playing'} ${act?.name}`, inline: false },
+            { name: '💰 Currency',     value: `${e.currency.symbol}${e.currency.name} | Start: ${e.startingBalance} | Daily: ${e.dailyAmount}`, inline: false },
+            { name: '⏱️ Cooldown',    value: fmt(botConfig.commands.defaultCooldown + 's'), inline: true },
+            { name: '📝 Footer',       value: fmt(botConfig.embeds.footer.text),            inline: true },
+            { name: '✅ Features ON',  value: featOn,  inline: false },
             { name: '❌ Features OFF', value: featOff, inline: false },
         ],
         footer: { text: 'All settings as of right now' },
@@ -254,23 +254,20 @@ function statusEmbed() {
     });
 }
 
-function commandsEmbed(client, page, total) {
+function commandsEmbed(page, total) {
     return createEmbed({
         title: '🚫 Command Enable / Disable',
-        description: 'Select a command from the dropdown to toggle it on or off for this server.\n\n' +
+        description: 'Select a command from the dropdown to toggle it on or off **for this server**.\n\n' +
             '> Server owners and admins can always use all commands regardless of this setting.',
         color: 'primary',
-        footer: { text: `Page ${page + 1} of ${total} • Commands disabled here still show in /help` },
+        footer: { text: `Page ${page + 1} of ${total} • Changes are per-server` },
         timestamp: true,
     });
 }
 
-// ── PERMISSIONS PAGE EMBEDS ───────────────────────────────────────────────────
-
 async function permissionsEmbed(guildId) {
     const overrides = await getFromDb(`guild:${guildId}:cmd_perms`, {});
     const entries   = Object.entries(overrides);
-    const total     = NON_PUBLIC_CMDS.length;
 
     const overrideLines = entries.length > 0
         ? entries.map(([cmd, roleIds]) =>
@@ -281,7 +278,7 @@ async function permissionsEmbed(guildId) {
     return createEmbed({
         title: '🔐 Command Permissions',
         description: [
-            'Grant specific roles access to commands, overriding the default Discord permission requirement.',
+            'Grant specific roles access to commands for **this server**, overriding the default Discord permission requirement.',
             '',
             '**How to use:**',
             '1. Pick a command from the dropdown below',
@@ -292,20 +289,21 @@ async function permissionsEmbed(guildId) {
             overrideLines,
         ].join('\n'),
         color: 'primary',
-        footer: { text: `${total} protected commands available • Owners & Admins always bypass permissions` },
+        footer: { text: `${NON_PUBLIC_CMDS.length} protected commands available • Owners & Admins always bypass` },
         timestamp: true,
     });
 }
 
 function permDetailEmbed(cmdName, roleIds, tier) {
-    const roleList = roleIds?.length > 0
+    const tierLabel = TIER_LABELS[tier] ?? TIER_LABELS[TIERS.PUBLIC] ?? 'Default Discord Permission';
+    const roleList  = roleIds?.length > 0
         ? roleIds.map(id => `<@&${id}>`).join(', ')
         : '_No role overrides — default Discord permission applies._';
 
     return createEmbed({
         title: `🔐 Permissions — \`/${cmdName}\``,
         description: [
-            `**Default requirement:** ${TIER_LABELS[tier] ?? 'Unknown'}`,
+            `**Default requirement:** ${tierLabel}`,
             '',
             '**Allowed roles (overrides default):**',
             roleList,
@@ -314,7 +312,7 @@ function permDetailEmbed(cmdName, roleIds, tier) {
             'Click **Clear All** to remove all overrides and restore the default requirement.',
         ].join('\n'),
         color: 'info',
-        footer: { text: 'Role overrides replace the default permission requirement entirely' },
+        footer: { text: 'Role overrides are per-server' },
         timestamp: true,
     });
 }
@@ -346,7 +344,6 @@ function backRow() {
     return row(btn('panel_back', '← Back', ButtonStyle.Danger));
 }
 
-// Presence rows
 function presenceRows() {
     return [
         row(
@@ -358,7 +355,6 @@ function presenceRows() {
     ];
 }
 
-// Branding rows
 function brandingRows() {
     return [
         row(
@@ -370,7 +366,6 @@ function brandingRows() {
     ];
 }
 
-// Economy rows
 function economyRows() {
     return [
         row(
@@ -383,7 +378,6 @@ function economyRows() {
     ];
 }
 
-// Features rows
 function featuresRows() {
     const opts = Object.entries(botConfig.features).map(([key, enabled]) =>
         new StringSelectMenuOptionBuilder()
@@ -401,7 +395,6 @@ function featuresRows() {
     ];
 }
 
-// Giveaway rows
 function giveawayRows() {
     return [
         row(btn('gv_settings', '✏️ Edit Settings', ButtonStyle.Primary)),
@@ -409,7 +402,6 @@ function giveawayRows() {
     ];
 }
 
-// Welcome rows
 function welcomeRows() {
     return [
         row(
@@ -420,7 +412,6 @@ function welcomeRows() {
     ];
 }
 
-// Cooldown rows
 function cooldownRows() {
     return [
         row(btn('cd_edit', '✏️ Edit Cooldown', ButtonStyle.Primary)),
@@ -428,10 +419,8 @@ function cooldownRows() {
     ];
 }
 
-// Status rows
 function statusRows() { return [backRow()]; }
 
-// ── Commands rows — PAGINATED ─────────────────────────────────────────────────
 function commandsRows(client, disabledCmds, page) {
     const allCommands = [...(client?.commands?.keys() ?? [])].sort();
     const totalPages  = Math.ceil(allCommands.length / CMDS_PER_PAGE);
@@ -453,7 +442,6 @@ function commandsRows(client, disabledCmds, page) {
             .addOptions(options)));
     }
 
-    // Pagination + back
     rows.push(row(
         btn('cmds_prev', '◀ Prev', ButtonStyle.Secondary).setDisabled(page === 0),
         btn('cmds_page', `${page + 1}/${totalPages}`, ButtonStyle.Primary).setDisabled(true),
@@ -464,9 +452,6 @@ function commandsRows(client, disabledCmds, page) {
     return rows;
 }
 
-// ── Permissions rows ──────────────────────────────────────────────────────────
-
-// State 1: pick a command
 function permsCmdSelectRows(page) {
     const totalPages = Math.ceil(NON_PUBLIC_CMDS.length / PERMS_PER_PAGE);
     const slice      = NON_PUBLIC_CMDS.slice(page * PERMS_PER_PAGE, (page + 1) * PERMS_PER_PAGE);
@@ -475,7 +460,7 @@ function permsCmdSelectRows(page) {
         new StringSelectMenuOptionBuilder()
             .setLabel(`/${name}`)
             .setValue(name)
-            .setDescription(TIER_LABELS[tier] ?? tier)
+            .setDescription(TIER_LABELS[tier] ?? 'Protected command')
     );
 
     return [
@@ -492,14 +477,13 @@ function permsCmdSelectRows(page) {
     ];
 }
 
-// State 2: manage roles for selected command
 function permsDetailRows() {
     return [
         row(new RoleSelectMenuBuilder()
             .setCustomId('perm_role_select')
             .setPlaceholder('Select a role...')),
         row(
-            btn('perm_add_role',  '✅ Add Role',   ButtonStyle.Success),
+            btn('perm_add_role',  '✅ Add Role',    ButtonStyle.Success),
             btn('perm_rem_role',  '❌ Remove Role', ButtonStyle.Danger),
             btn('perm_clear_all', '🗑 Clear All',   ButtonStyle.Danger),
             btn('perm_back_cmd',  '← Commands',    ButtonStyle.Secondary),
@@ -507,7 +491,7 @@ function permsDetailRows() {
     ];
 }
 
-// ── Modal builders ────────────────────────────────────────────────────────────
+// ─── Modal builders ───────────────────────────────────────────────────────────
 
 function actTextModal() {
     const current = botConfig.presence.activities?.[0]?.name ?? '';
@@ -554,9 +538,9 @@ function currencyModal() {
         .setCustomId('modal_currency')
         .setTitle('Edit Currency')
         .addComponents(
-            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',      c.symbol     ?? '£')),
-            row(input('cur_name',   'Name singular (e.g. coin)',  c.name       ?? 'coin')),
-            row(input('cur_plural', 'Name plural (e.g. coins)',   c.namePlural ?? 'coins')),
+            row(input('cur_symbol', 'Symbol (e.g. £ $ 🪙)',     c.symbol     ?? '£')),
+            row(input('cur_name',   'Name singular (e.g. coin)', c.name       ?? 'coin')),
+            row(input('cur_plural', 'Name plural (e.g. coins)',  c.namePlural ?? 'coins')),
         );
 }
 
@@ -608,18 +592,23 @@ function giveawayModal() {
         );
 }
 
-function welcomeModal(type) {
-    const w = botConfig.welcome;
+// Welcome modal reads the current value from the already-loaded per-guild cfg
+function welcomeModal(type, cfg) {
     const isWelcome = type === 'welcome';
+    const current   = isWelcome
+        ? (cfg?.welcomeMessage ?? botConfig.welcome.defaultWelcomeMessage ?? '')
+        : (cfg?.leaveMessage   ?? botConfig.welcome.defaultGoodbyeMessage ?? '');
     return new ModalBuilder()
         .setCustomId(isWelcome ? 'modal_welcome_msg' : 'modal_goodbye_msg')
         .setTitle(isWelcome ? 'Edit Welcome Message' : 'Edit Goodbye Message')
         .addComponents(row(
             new TextInputBuilder()
                 .setCustomId('msg')
-                .setLabel(isWelcome ? 'Welcome message ({user} {server} {memberCount})' : 'Goodbye message ({user} {memberCount})')
+                .setLabel(isWelcome
+                    ? 'Welcome message ({user} {server} {memberCount})'
+                    : 'Goodbye message ({user} {server} {memberCount})')
                 .setStyle(TextInputStyle.Paragraph)
-                .setValue(isWelcome ? (w.defaultWelcomeMessage ?? '') : (w.defaultGoodbyeMessage ?? ''))
+                .setValue(current)
                 .setMaxLength(500)
                 .setRequired(true)
         ));
@@ -629,22 +618,22 @@ function cooldownModal() {
     return new ModalBuilder()
         .setCustomId('modal_cooldown')
         .setTitle('Edit Default Cooldown')
-        .addComponents(row(input('cooldown_secs', 'Cooldown in seconds (0 = no cooldown)', String(botConfig.commands.defaultCooldown ?? 3)).setMaxLength(4)));
+        .addComponents(row(
+            input('cooldown_secs', 'Cooldown in seconds (0 = no cooldown)', String(botConfig.commands.defaultCooldown ?? 3))
+                .setMaxLength(4)
+        ));
 }
 
-// ── getPage helper ────────────────────────────────────────────────────────────
+// ─── getPage helper ────────────────────────────────────────────────────────────
 function getPage(pageId) {
     switch (pageId) {
         case 'main':           return { embed: mainEmbed(),     rows: mainRows() };
         case 'panel_presence': return { embed: presenceEmbed(), rows: presenceRows() };
         case 'panel_branding': return { embed: brandingEmbed(), rows: brandingRows() };
         case 'panel_economy':  return { embed: economyEmbed(),  rows: economyRows() };
-        case 'panel_features': return { embed: featuresEmbed(), rows: featuresRows() };
         case 'panel_giveaway': return { embed: giveawayEmbed(), rows: giveawayRows() };
-        case 'panel_welcome':  return { embed: welcomeEmbed(),  rows: welcomeRows() };
         case 'panel_cooldown': return { embed: cooldownEmbed(), rows: cooldownRows() };
         case 'panel_status':   return { embed: statusEmbed(),   rows: statusRows() };
-        // panel_commands and panel_perms are handled dynamically (need client/guildId)
         default:               return null;
     }
 }
@@ -678,11 +667,12 @@ export default {
         const { embed, rows } = getPage('main');
         const msg = await interaction.editReply({ embeds: [embed], components: rows });
 
-        // ── Pagination / selection state ──────────────────────────────────────
-        let cmdPage         = 0; // Commands page
-        let permPage        = 0; // Permissions command-list page
-        let permSelectedCmd = null; // Currently selected command in Permissions
-        let permSelectedRole= null; // Role picked from RoleSelectMenu
+        // ── Per-session state ─────────────────────────────────────────────────
+        let cmdPage         = 0;
+        let permPage        = 0;
+        let permSelectedCmd = null;
+        let permSelectedRole= null;
+        let welcomeCfg      = null; // lazily loaded when Welcome page is opened
 
         // ── Component collector ───────────────────────────────────────────────
         const collector = msg.createMessageComponentCollector({
@@ -694,7 +684,7 @@ export default {
             try {
                 const id = i.customId;
 
-                // ── Back → main menu ───────────────────────────────────────────
+                // ── Back → main menu ──────────────────────────────────────────
                 if (id === 'panel_back') {
                     await i.deferUpdate();
                     permSelectedCmd  = null;
@@ -703,45 +693,57 @@ export default {
                     return i.editReply({ embeds: [page.embed], components: page.rows });
                 }
 
-                // ── Category navigation ────────────────────────────────────────
+                // ── Static category pages ─────────────────────────────────────
                 const staticPage = getPage(id);
                 if (staticPage) {
                     await i.deferUpdate();
                     return i.editReply({ embeds: [staticPage.embed], components: staticPage.rows });
                 }
 
-                // ── Commands page entry ────────────────────────────────────────
+                // ── Features page ─────────────────────────────────────────────
+                if (id === 'panel_features') {
+                    await i.deferUpdate();
+                    return i.editReply({ embeds: [featuresEmbed()], components: featuresRows() });
+                }
+
+                // ── Welcome page — load per-guild config ──────────────────────
+                if (id === 'panel_welcome') {
+                    await i.deferUpdate();
+                    welcomeCfg = await getWelcomeConfig(client, interaction.guildId);
+                    return i.editReply({ embeds: [welcomeEmbed(welcomeCfg)], components: welcomeRows() });
+                }
+
+                // ── Commands page entry ───────────────────────────────────────
                 if (id === 'panel_commands') {
                     await i.deferUpdate();
                     cmdPage = 0;
                     const configKey = `guild:${interaction.guildId}:config`;
                     let guildCfg = {};
                     try { guildCfg = await getFromDb(configKey, {}); } catch {}
-                    const disabled = guildCfg.disabledCommands ?? {};
+                    const disabled   = guildCfg.disabledCommands ?? {};
                     const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
                     return i.editReply({
-                        embeds:     [commandsEmbed(client, cmdPage, totalPages)],
+                        embeds:     [commandsEmbed(cmdPage, totalPages)],
                         components: commandsRows(client, disabled, cmdPage),
                     });
                 }
 
-                // ── Commands: pagination ───────────────────────────────────────
+                // ── Commands: pagination ──────────────────────────────────────
                 if (id === 'cmds_prev' || id === 'cmds_next') {
                     await i.deferUpdate();
-                    if (id === 'cmds_prev') cmdPage--;
-                    else                    cmdPage++;
+                    cmdPage += id === 'cmds_next' ? 1 : -1;
                     const configKey = `guild:${interaction.guildId}:config`;
                     let guildCfg = {};
                     try { guildCfg = await getFromDb(configKey, {}); } catch {}
-                    const disabled = guildCfg.disabledCommands ?? {};
+                    const disabled   = guildCfg.disabledCommands ?? {};
                     const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
                     return i.editReply({
-                        embeds:     [commandsEmbed(client, cmdPage, totalPages)],
+                        embeds:     [commandsEmbed(cmdPage, totalPages)],
                         components: commandsRows(client, disabled, cmdPage),
                     });
                 }
 
-                // ── Commands: toggle a command ─────────────────────────────────
+                // ── Commands: toggle ──────────────────────────────────────────
                 if (id === 'commands_toggle') {
                     await i.deferUpdate();
                     const cmdName   = i.values[0];
@@ -753,79 +755,68 @@ export default {
                     if (wasDisabled) delete guildCfg.disabledCommands[cmdName];
                     else             guildCfg.disabledCommands[cmdName] = true;
                     await setInDb(configKey, guildCfg);
-                    const disabled   = guildCfg.disabledCommands;
                     const totalPages = Math.ceil([...(client?.commands?.keys() ?? [])].length / CMDS_PER_PAGE);
                     const statusEmb  = createEmbed({
                         title:       '🚫 Command Toggles',
-                        description: `Command \`/${cmdName}\` is now **${wasDisabled ? '✅ enabled' : '🚫 disabled'}**.\n\nUse the select menu to toggle more commands.`,
+                        description: `Command \`/${cmdName}\` is now **${wasDisabled ? '✅ enabled' : '🚫 disabled'}** in this server.\n\nUse the select menu to toggle more commands.`,
                         color:       wasDisabled ? 'success' : 'error',
                         footer:      { text: 'Server owners & admins can always use all commands' },
                         timestamp:   true,
                     });
                     return i.editReply({
                         embeds:     [statusEmb],
-                        components: commandsRows(client, disabled, cmdPage),
+                        components: commandsRows(client, guildCfg.disabledCommands, cmdPage),
                     });
                 }
 
-                // ════════════════════════════════════════════════════════════════
-                //  PERMISSIONS PAGE
-                // ════════════════════════════════════════════════════════════════
-
-                // ── Permissions page entry ─────────────────────────────────────
+                // ── Permissions page entry ────────────────────────────────────
                 if (id === 'panel_perms') {
                     await i.deferUpdate();
-                    permPage        = 0;
-                    permSelectedCmd = null;
-                    permSelectedRole= null;
+                    permPage = 0; permSelectedCmd = null; permSelectedRole = null;
                     return i.editReply({
                         embeds:     [await permissionsEmbed(interaction.guildId)],
                         components: permsCmdSelectRows(permPage),
                     });
                 }
 
-                // ── Permissions: paginate command list ─────────────────────────
+                // ── Permissions: paginate ─────────────────────────────────────
                 if (id === 'perm_prev' || id === 'perm_next') {
                     await i.deferUpdate();
-                    if (id === 'perm_prev') permPage--;
-                    else                    permPage++;
-                    permSelectedCmd  = null;
-                    permSelectedRole = null;
+                    permPage += id === 'perm_next' ? 1 : -1;
+                    permSelectedCmd = null; permSelectedRole = null;
                     return i.editReply({
                         embeds:     [await permissionsEmbed(interaction.guildId)],
                         components: permsCmdSelectRows(permPage),
                     });
                 }
 
-                // ── Permissions: command selected ──────────────────────────────
+                // ── Permissions: command selected ─────────────────────────────
                 if (id === 'perm_cmd_select') {
                     await i.deferUpdate();
                     permSelectedCmd  = i.values[0];
                     permSelectedRole = null;
-                    const permKey    = `guild:${interaction.guildId}:cmd_perms`;
-                    const overrides  = await getFromDb(permKey, {});
-                    const roleIds    = overrides[permSelectedCmd] ?? [];
-                    const tier       = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    const overrides = await getFromDb(`guild:${interaction.guildId}:cmd_perms`, {});
+                    const roleIds   = overrides[permSelectedCmd] ?? [];
+                    const tier      = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
                     return i.editReply({
                         embeds:     [permDetailEmbed(permSelectedCmd, roleIds, tier)],
                         components: permsDetailRows(),
                     });
                 }
 
-                // ── Permissions: role selected from RoleSelectMenu ─────────────
+                // ── Permissions: role selected ────────────────────────────────
                 if (id === 'perm_role_select') {
                     await i.deferUpdate();
-                    permSelectedRole = i.values[0]; // single role ID
-                    // Refresh detail embed (no visual change, just acknowledge)
-                    const permKey  = `guild:${interaction.guildId}:cmd_perms`;
-                    const overrides = await getFromDb(permKey, {});
-                    const roleIds  = overrides[permSelectedCmd] ?? [];
-                    const tier     = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    permSelectedRole = i.values[0];
+                    const overrides = await getFromDb(`guild:${interaction.guildId}:cmd_perms`, {});
+                    const roleIds   = overrides[permSelectedCmd] ?? [];
+                    const tier      = COMMAND_TIERS[permSelectedCmd] ?? TIERS.PUBLIC;
+                    const tierLabel = TIER_LABELS[tier] ?? 'Default Discord Permission';
                     return i.editReply({
                         embeds: [createEmbed({
-                            title:       `🔐 Permissions — \`/${permSelectedCmd}\``,
+                            title: `🔐 Permissions — \`/${permSelectedCmd}\``,
                             description: [
-                                `**Default requirement:** ${TIER_LABELS[tier] ?? 'Unknown'}`,
+                                `**Default requirement:** ${tierLabel}`,
                                 '',
                                 '**Allowed roles:**',
                                 roleIds.length > 0 ? roleIds.map(id => `<@&${id}>`).join(', ') : '_None set_',
@@ -840,7 +831,7 @@ export default {
                     });
                 }
 
-                // ── Permissions: add role ──────────────────────────────────────
+                // ── Permissions: add role ─────────────────────────────────────
                 if (id === 'perm_add_role') {
                     await i.deferUpdate();
                     if (!permSelectedCmd || !permSelectedRole) {
@@ -860,7 +851,7 @@ export default {
                     });
                 }
 
-                // ── Permissions: remove role ───────────────────────────────────
+                // ── Permissions: remove role ──────────────────────────────────
                 if (id === 'perm_rem_role') {
                     await i.deferUpdate();
                     if (!permSelectedCmd || !permSelectedRole) {
@@ -869,7 +860,7 @@ export default {
                     const permKey   = `guild:${interaction.guildId}:cmd_perms`;
                     const overrides = await getFromDb(permKey, {});
                     if (Array.isArray(overrides[permSelectedCmd])) {
-                        overrides[permSelectedCmd] = overrides[permSelectedCmd].filter(id => id !== permSelectedRole);
+                        overrides[permSelectedCmd] = overrides[permSelectedCmd].filter(r => r !== permSelectedRole);
                         if (overrides[permSelectedCmd].length === 0) delete overrides[permSelectedCmd];
                         await setInDb(permKey, overrides);
                     }
@@ -881,7 +872,7 @@ export default {
                     });
                 }
 
-                // ── Permissions: clear all roles for this command ──────────────
+                // ── Permissions: clear all ────────────────────────────────────
                 if (id === 'perm_clear_all') {
                     await i.deferUpdate();
                     if (!permSelectedCmd) {
@@ -898,18 +889,17 @@ export default {
                     });
                 }
 
-                // ── Permissions: back to command list ──────────────────────────
+                // ── Permissions: back to command list ─────────────────────────
                 if (id === 'perm_back_cmd') {
                     await i.deferUpdate();
-                    permSelectedCmd  = null;
-                    permSelectedRole = null;
+                    permSelectedCmd = null; permSelectedRole = null;
                     return i.editReply({
                         embeds:     [await permissionsEmbed(interaction.guildId)],
                         components: permsCmdSelectRows(permPage),
                     });
                 }
 
-                // ── Presence sub-nav ───────────────────────────────────────────
+                // ── Presence sub-nav ──────────────────────────────────────────
                 if (id === 'presence_status') {
                     await i.deferUpdate();
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceStatusRows() });
@@ -919,7 +909,7 @@ export default {
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceActTypeRows() });
                 }
 
-                // ── Presence selects ───────────────────────────────────────────
+                // ── Presence selects ──────────────────────────────────────────
                 if (id === 'presence_status_select') {
                     await i.deferUpdate();
                     const newStatus = i.values[0];
@@ -937,7 +927,7 @@ export default {
                     return i.editReply({ embeds: [presenceEmbed()], components: presenceRows() });
                 }
 
-                // ── Features toggle ────────────────────────────────────────────
+                // ── Features toggle ───────────────────────────────────────────
                 if (id === 'features_toggle') {
                     await i.deferUpdate();
                     const key     = i.values[0];
@@ -946,7 +936,7 @@ export default {
                     return i.editReply({ embeds: [featuresEmbed()], components: featuresRows() });
                 }
 
-                // ── Modal-opening buttons ──────────────────────────────────────
+                // ── Modal-opening buttons ─────────────────────────────────────
                 const modalMap = {
                     'presence_acttext': actTextModal(),
                     'branding_footer':  footerModal(),
@@ -957,8 +947,8 @@ export default {
                     'econ_work':        workModal(),
                     'econ_rob':         robModal(),
                     'gv_settings':      giveawayModal(),
-                    'wlc_welcome':      welcomeModal('welcome'),
-                    'wlc_goodbye':      welcomeModal('goodbye'),
+                    'wlc_welcome':      welcomeModal('welcome', welcomeCfg),
+                    'wlc_goodbye':      welcomeModal('goodbye', welcomeCfg),
                     'cd_edit':          cooldownModal(),
                 };
                 if (modalMap[id]) {
@@ -1085,13 +1075,27 @@ export default {
                     return msg.edit({ embeds: [giveawayEmbed()], components: giveawayRows() });
                 }
 
+                // ── Welcome / Goodbye — save to per-guild DB ──────────────────
                 if (id === 'modal_welcome_msg' || id === 'modal_goodbye_msg') {
-                    const key = id === 'modal_welcome_msg'
-                        ? 'welcome.defaultWelcomeMessage'
-                        : 'welcome.defaultGoodbyeMessage';
-                    await persist(key, i.fields.getTextInputValue('msg').trim());
-                    await i.reply({ content: '✅ Message updated.', flags: MessageFlags.Ephemeral });
-                    return msg.edit({ embeds: [welcomeEmbed()], components: welcomeRows() });
+                    const isWelcome = id === 'modal_welcome_msg';
+                    const newMsg    = i.fields.getTextInputValue('msg').trim();
+
+                    // Load fresh copy in case it changed
+                    welcomeCfg = await getWelcomeConfig(client, interaction.guildId);
+
+                    if (isWelcome) {
+                        welcomeCfg.welcomeMessage = newMsg;
+                    } else {
+                        welcomeCfg.leaveMessage = newMsg;
+                    }
+
+                    await saveWelcomeConfig(client, interaction.guildId, welcomeCfg);
+
+                    await i.reply({
+                        content: `✅ ${isWelcome ? 'Welcome' : 'Goodbye'} message updated for this server.`,
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    return msg.edit({ embeds: [welcomeEmbed(welcomeCfg)], components: welcomeRows() });
                 }
 
                 if (id === 'modal_cooldown') {
@@ -1115,7 +1119,6 @@ export default {
         };
 
         client.on('interactionCreate', onModal);
-
         collector.on('end', () => {
             client.off('interactionCreate', onModal);
             msg.edit({ components: [] }).catch(() => {});
@@ -1123,7 +1126,7 @@ export default {
     },
 };
 
-// ─── presenceStatusRows / presenceActTypeRows (used in collector) ─────────────
+// ─── presenceStatusRows / presenceActTypeRows ─────────────────────────────────
 function presenceStatusRows() {
     return [
         row(new StringSelectMenuBuilder()
