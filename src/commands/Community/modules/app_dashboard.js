@@ -14,9 +14,6 @@ import {
     MessageFlags,
     ComponentType,
     EmbedBuilder,
-    LabelBuilder,
-    CheckboxBuilder,
-    TextDisplayBuilder,
 } from 'discord.js';
 import { InteractionHelper } from '../../../utils/interactionHelper.js';
 import { successEmbed, errorEmbed } from '../../../utils/embeds.js';
@@ -223,6 +220,9 @@ async function showApplicationSelector(interaction, roles, settings, guildId, cl
         embeds: [embed],
         components: [new ActionRowBuilder().addComponents(selectMenu)],
     });
+
+    if (!interaction.channel) return;
+
 
     const collector = interaction.channel.createMessageComponentCollector({
         componentType: ComponentType.StringSelect,
@@ -520,22 +520,19 @@ function setupCollectors(interaction, settings, roles, guildId, client, selected
 
             const confirmModal = new ModalBuilder()
                 .setCustomId('app_delete_confirm')
-                .setTitle('Confirm Application Deletion');
-
-            const deleteWarningText = new TextDisplayBuilder()
-                .setContent(`⚠️ You are about to permanently delete **${appNameForDelete}**. All stored applications and settings for this role will be removed and cannot be recovered.`);
-
-            const deleteCheckbox = new CheckboxBuilder()
-                .setCustomId('confirm_delete')
-                .setDefault(false);
-
-            const deleteCheckboxLabel = new LabelBuilder()
-                .setLabel('I confirm — this cannot be undone')
-                .setCheckboxComponent(deleteCheckbox);
-
-            confirmModal
-                .addTextDisplayComponents(deleteWarningText)
-                .addLabelComponents(deleteCheckboxLabel);
+                .setTitle('Confirm Application Deletion')
+                .addComponents(
+                    new ActionRowBuilder().addComponents(
+                        new TextInputBuilder()
+                            .setCustomId('confirm_delete')
+                            .setLabel('Type CONFIRM to delete this application')
+                            .setPlaceholder('CONFIRM')
+                            .setStyle(TextInputStyle.Short)
+                            .setMinLength(7)
+                            .setMaxLength(7)
+                            .setRequired(true),
+                    ),
+                );
 
             try {
                 await btnInteraction.showModal(confirmModal);
@@ -1156,40 +1153,7 @@ async function handleRetention(selectInteraction, rootInteraction, settings, rol
         .setCustomId('app_cfg_retention')
         .setTitle('Application Retention Periods');
 
-    const retentionInfo = new TextDisplayBuilder()
-        .setContent(
-            '**Pending** — how long unanswered/in-progress applications are kept before being automatically removed.\n' +
-            '**Reviewed** — how long approved or denied applications are kept.\n' +
-            '-# Enter a whole number between 1 and 3650 (max 10 years).',
-        );
-
-    const pendingLabel = new LabelBuilder()
-        .setLabel('Pending retention (days)')
-        .setTextInputComponent(
-            new TextInputBuilder()
-                .setCustomId('pending_days')
-                .setStyle(TextInputStyle.Short)
-                .setValue(String(settings.pendingApplicationRetentionDays ?? 30))
-                .setMaxLength(4)
-                .setMinLength(1)
-                .setRequired(true),
-        );
-
-    const reviewedLabel = new LabelBuilder()
-        .setLabel('Reviewed retention (days)')
-        .setTextInputComponent(
-            new TextInputBuilder()
-                .setCustomId('reviewed_days')
-                .setStyle(TextInputStyle.Short)
-                .setValue(String(settings.reviewedApplicationRetentionDays ?? 14))
-                .setMaxLength(4)
-                .setMinLength(1)
-                .setRequired(true),
-        );
-
-    modal
-        .addTextDisplayComponents(retentionInfo)
-        .addLabelComponents(pendingLabel, reviewedLabel);
+    
 
     await selectInteraction.showModal(modal);
 
