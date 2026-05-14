@@ -96,6 +96,9 @@ export default {
             logger.error('Failed to edit reply in config_setup:', error);
         });
 
+        if (!interaction.channel) return;
+
+
         const collector = interaction.channel.createMessageComponentCollector({
             componentType: ComponentType.StringSelect,
             filter: (i) => i.user.id === interaction.user.id && i.customId === `jointocreate_config_${triggerChannel.id}`,
