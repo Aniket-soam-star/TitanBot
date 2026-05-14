@@ -1,5 +1,5 @@
 import { getColor } from '../../config/bot.js';
-import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, LabelBuilder } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, MessageFlags, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder } from 'discord.js';
 import { errorEmbed, successEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../../utils/errorHandler.js';
@@ -380,51 +380,35 @@ async function handleConfigSubcommand(interaction, client) {
 
 async function handleNameTemplateModal(interaction, triggerChannel, currentConfig, client) {
     try {
-        const TEMPLATE_OPTIONS = [
-            { label: "{username}'s Room (Default)", value: "{username}'s Room" },
-            { label: "{username}'s Channel",        value: "{username}'s Channel" },
-            { label: "{username}'s Lounge",         value: "{username}'s Lounge" },
-            { label: "{username}'s Space",          value: "{username}'s Space" },
-            { label: "{displayName}'s Room",        value: "{displayName}'s Room" },
-            { label: "{username}'s VC",             value: "{username}'s VC" },
-            { label: "🎵 {username}'s Music Room",  value: "🎵 {username}'s Music Room" },
-            { label: "🎮 {username}'s Gaming Room", value: "🎮 {username}'s Gaming Room" },
-            { label: "💬 {username}'s Chat Room",   value: "💬 {username}'s Chat Room" },
-            { label: "{username}'s Private Room",   value: "{username}'s Private Room" },
-        ];
-
         const currentTemplate = currentConfig.channelConfig?.nameTemplate
             || currentConfig.channelNameTemplate
             || "{username}'s Room";
 
-        const templateSelect = new StringSelectMenuBuilder()
-            .setCustomId('template')
-            .setPlaceholder('Pick a name template...')
-            .setOptions(
-                TEMPLATE_OPTIONS.map(o => ({
-                    label: o.label,
-                    value: o.value,
-                    default: o.value === currentTemplate,
-                })),
-            );
-
-        const templateLabel = new LabelBuilder()
-            .setLabel('Channel name template')
-            .setStringSelectMenuComponent(templateSelect);
-
         const modal = new ModalBuilder()
             .setCustomId(`jtc_name_modal_${triggerChannel.id}`)
             .setTitle('Channel Name Template')
-            .addLabelComponents(templateLabel);
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('channel_name_template')
+                        .setLabel('Name template ({username} or {displayName})')
+                        .setPlaceholder("{username}'s Channel")
+                        .setStyle(TextInputStyle.Short)
+                        .setValue(currentTemplate)
+                        .setMaxLength(100)
+                        .setRequired(true),
+                ),
+            );
 
         await interaction.showModal(modal);
 
         const modalSubmission = await interaction.awaitModalSubmit({
             filter: (i) => i.customId === `jtc_name_modal_${triggerChannel.id}` && i.user.id === interaction.user.id,
             time: 60000
-        });
+        }).catch(() => null);
 
-        // Recheck permissions
+        if (!modalSubmission) return;
+
         if (!hasManageGuildPermission(modalSubmission.member)) {
             await modalSubmission.reply({
                 content: '❌ You need **Manage Server** permission to modify these settings.',
@@ -433,7 +417,7 @@ async function handleNameTemplateModal(interaction, triggerChannel, currentConfi
             return;
         }
 
-        const [newTemplate] = modalSubmission.fields.getStringSelectValues('template');
+        const newTemplate = modalSubmission.fields.getTextInputValue('channel_name_template').trim();
 
         await updateChannelConfig(client, interaction.guild.id, triggerChannel.id, {
             nameTemplate: newTemplate
@@ -450,12 +434,8 @@ async function handleNameTemplateModal(interaction, triggerChannel, currentConfi
         });
 
     } catch (error) {
-        if (error.code === 'INTERACTION_COLLECTOR_ERROR') {
-            return;
-        }
-        if (error instanceof TitanBotError) {
-            throw error;
-        }
+        if (error.code === 'INTERACTION_COLLECTOR_ERROR') return;
+        if (error instanceof TitanBotError) throw error;
         logger.error('Unexpected error in name template modal:', error);
         throw new TitanBotError(
             `Modal error: ${error.message}`,
