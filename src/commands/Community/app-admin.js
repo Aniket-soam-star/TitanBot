@@ -140,14 +140,6 @@ export default {
 };
 
 async function handleSetup(interaction) {
-    // Ensure interaction hasn't been deferred/replied yet (safety check)
-    if (interaction.deferred || interaction.replied) {
-        return InteractionHelper.safeReply(interaction, {
-            embeds: [errorEmbed("This interaction has already been processed. Please try the command again.")],
-            flags: ["Ephemeral"],
-        });
-    }
-
     // Build modal for application setup
     const modal = new ModalBuilder()
         .setCustomId('app_setup_modal')
@@ -290,16 +282,13 @@ async function handleSetup(interaction) {
     // Save the questions for this specific role
     await saveApplicationRoleSettings(interaction.client, interaction.guild.id, roleId, { questions });
 
-    await submitted.reply({
+    await submitted.editReply({
         embeds: [successEmbed(
             '✅ Application Created',
-            `**${appName}** application has been created for ${role}.\n\nYou can customize the log channel, manager roles, questions, and retention period in the dashboard.`,
+            `**${appName}** application has been created for ${role}.\n\nUse \`/app-admin dashboard\` to customize the log channel, manager roles, questions, and more.`,
         )],
-        flags: ['Ephemeral'],
+        components: [],
     });
-
-    // Auto-open dashboard is skipped here since we've already used multiple replies
-    // User can run /app-admin dashboard to manage the new application
 }
 
 
