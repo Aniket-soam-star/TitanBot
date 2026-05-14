@@ -224,6 +224,9 @@ export default {
                 flags: MessageFlags.Ephemeral,
             });
 
+            if (!interaction.channel) return;
+
+
             const collector = interaction.channel.createMessageComponentCollector({
                 componentType: ComponentType.StringSelect,
                 filter: i =>

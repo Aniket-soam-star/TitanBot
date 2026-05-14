@@ -208,6 +208,8 @@ export default {
             });
 
             // ── Select collector ──────────────────────────────────────────────
+            if (!interaction.channel) return;
+
             const collector = interaction.channel.createMessageComponentCollector({
                 componentType: ComponentType.StringSelect,
                 filter: i =>
