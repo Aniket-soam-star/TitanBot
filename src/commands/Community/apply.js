@@ -92,16 +92,6 @@ export default {
             interaction.client,
             guild.id,
         );
-        
-        // Only block submissions when disabled — list/status still work
-        if (!settings.enabled && subcommand === 'submit') {
-            throw createError(
-                'Applications are disabled',
-                ErrorTypes.CONFIGURATION,
-                'Applications are currently disabled in this server. An admin must run `/app-admin setup` first.',
-                { guildId: guild.id }
-            );
-        }
 
         if (subcommand === "submit") {
             await handleSubmit(interaction, settings);

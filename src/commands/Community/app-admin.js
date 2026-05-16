@@ -147,6 +147,7 @@ async function handleSetup(interaction) {
 
     const appNameInput = new TextInputBuilder()
         .setCustomId('app_name')
+        .setLabel('Application Name')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('e.g., Moderator, Helper, Developer')
         .setMaxLength(50)
@@ -155,6 +156,7 @@ async function handleSetup(interaction) {
 
     const q1Input = new TextInputBuilder()
         .setCustomId('app_question_1')
+        .setLabel('Question 1')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Why do you want this role?')
         .setMaxLength(100)
@@ -163,6 +165,7 @@ async function handleSetup(interaction) {
 
     const q2Input = new TextInputBuilder()
         .setCustomId('app_question_2')
+        .setLabel('Question 2 (optional)')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('What experience do you have?')
         .setMaxLength(100)
@@ -170,6 +173,7 @@ async function handleSetup(interaction) {
 
     const q3Input = new TextInputBuilder()
         .setCustomId('app_question_3')
+        .setLabel('Question 3 (optional)')
         .setStyle(TextInputStyle.Short)
         .setMaxLength(100)
         .setRequired(false);
@@ -214,21 +218,17 @@ async function handleSetup(interaction) {
         flags: ['Ephemeral'],
     });
 
-    const roleMsg = await submitted.fetchReply();
-    const roleCollector = roleMsg.createMessageComponentCollector({
-        time: 60_000,
-        max: 1,
-    });
-
-    const roleId = await new Promise((resolve) => {
-        roleCollector.on('collect', async ri => {
-            await ri.deferUpdate();
-            resolve(ri.values[0]);
+    let roleId = null;
+    try {
+        const roleInteraction = await submitted.awaitMessageComponent({
+            filter: i => i.user.id === interaction.user.id && i.customId === 'app_setup_role_select',
+            time: 60_000,
         });
-        roleCollector.on('end', (col) => {
-            if (col.size === 0) resolve(null);
-        });
-    });
+        await roleInteraction.deferUpdate();
+        roleId = roleInteraction.values[0];
+    } catch {
+        roleId = null;
+    }
 
     if (!roleId) {
         await submitted.editReply({
@@ -247,9 +247,9 @@ async function handleSetup(interaction) {
     // Get the role to verify it exists
     const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
     if (!role) {
-        await submitted.reply({
+        await submitted.editReply({
             embeds: [errorEmbed('Invalid Role', 'The selected role could not be found.')],
-            flags: ['Ephemeral'],
+            components: [],
         });
         return;
     }
@@ -257,9 +257,9 @@ async function handleSetup(interaction) {
     // Check if this role is already an application
     const existingRoles = await getApplicationRoles(interaction.client, interaction.guild.id);
     if (existingRoles.some(r => r.roleId === roleId)) {
-        await submitted.reply({
+        await submitted.editReply({
             embeds: [errorEmbed('Already Configured', `The role ${role} is already configured as an application.`)],
-            flags: ['Ephemeral'],
+            components: [],
         });
         return;
     }
