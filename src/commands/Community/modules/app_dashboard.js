@@ -148,24 +148,17 @@ export default {
                 getApplicationRoles(client, guildId),
             ]);
 
-            // Check if application system is completely unconfigured
-            const isCompletelyUnconfigured = 
-                !settings.logChannelId && 
-                !settings.enabled && 
-                (settings.managerRoles?.length ?? 0) === 0 && 
-                roles.length === 0;
-
-            if (isCompletelyUnconfigured) {
-                throw new TitanBotError(
-                    'Applications system not set up',
-                    ErrorTypes.CONFIGURATION,
-                    'The applications system has not been configured yet. Please run `/app-admin setup` to create your first application.',
-                );
-            }
-
-            // If no application roles exist, show global settings to add one
+            // If no application roles exist, show setup prompt
             if (roles.length === 0) {
-                await showGlobalDashboard(interaction, settings, roles, guildId, client);
+                await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [createEmbed({
+                        title: '⚙️ No Applications Configured',
+                        description: 'No applications have been set up yet.\n\nRun `/app-admin setup` to create your first application.',
+                        color: 'info',
+                        timestamp: true,
+                    })],
+                    components: [],
+                });
                 return;
             }
 
