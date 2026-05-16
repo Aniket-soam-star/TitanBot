@@ -165,17 +165,7 @@ class ApplicationService {
 
             
             const settings = await getApplicationSettings(client, data.guildId);
-            if (!settings.enabled) {
-                throw createError(
-                    'Applications are disabled',
-                    ErrorTypes.CONFIGURATION,
-                    'Applications are currently disabled in this server.',
-                    { guildId: data.guildId }
-                );
-            }
-
-            
-            const userApps = await getUserApplications(client, data.guildId, data.userId);
+const userApps = await getUserApplications(client, data.guildId, data.userId);
             const pendingApp = userApps.find(app => app.status === 'pending');
 
             if (pendingApp) {
