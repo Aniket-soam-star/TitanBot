@@ -102,7 +102,7 @@ export default {
         const collector = interaction.channel.createMessageComponentCollector({
             componentType: ComponentType.StringSelect,
             filter: (i) => i.user.id === interaction.user.id && i.customId === `jointocreate_config_${triggerChannel.id}`,
-time: 60000
+time: 300_000,
         });
 
         collector.on('collect', async (selectInteraction) => {
@@ -194,7 +194,7 @@ async function handleNameTemplateChange(interaction, triggerChannel, currentConf
 
     const collector = interaction.channel.createMessageCollector({
         filter: (m) => m.author.id === interaction.user.id,
-time: 600_000,
+time: 900_000,
         max: 1
     });
 
@@ -272,7 +272,7 @@ async function handleUserLimitChange(interaction, triggerChannel, currentConfig,
 
     const collector = interaction.channel.createMessageCollector({
         filter: (m) => m.author.id === interaction.user.id && /^\d+$/.test(m.content.trim()),
-        time: 600_000,
+        time: 900_000,
         max: 1
     });
 
@@ -355,7 +355,7 @@ async function handleBitrateChange(interaction, triggerChannel, currentConfig, c
 
     const collector = interaction.channel.createMessageCollector({
         filter: (m) => m.author.id === interaction.user.id && /^\d+$/.test(m.content.trim()),
-        time: 600_000,
+        time: 900_000,
         max: 1
     });
 
@@ -443,7 +443,7 @@ async function handleRemoveTrigger(interaction, triggerChannel, currentConfig, c
         componentType: ComponentType.Button,
         filter: (i) => i.user.id === interaction.user.id && 
                      (i.customId === `confirm_remove_${triggerChannel.id}` || i.customId === `cancel_remove_${triggerChannel.id}`),
-        time: 600_000,
+        time: 900_000,
         max: 1
     });
 
