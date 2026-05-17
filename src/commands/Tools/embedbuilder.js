@@ -265,7 +265,7 @@ async function handleEditContent(selectInteraction, rootInteraction, state) {
     const submitted = await selectInteraction
         .awaitModalSubmit({
             filter: i => i.customId === 'eb_content' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -313,7 +313,7 @@ async function handleSetColor(selectInteraction, rootInteraction, state) {
         componentType: ComponentType.StringSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'eb_color_pick',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -343,7 +343,7 @@ async function handleSetColor(selectInteraction, rootInteraction, state) {
                 .awaitModalSubmit({
                     filter: i =>
                         i.customId === 'eb_custom_hex' && i.user.id === colorInter.user.id,
-                    time: 60_000,
+                    time: 300_000,
                 })
                 .catch(() => null);
 
@@ -414,7 +414,7 @@ async function handleSetAuthor(selectInteraction, rootInteraction, state) {
     const submitted = await selectInteraction
         .awaitModalSubmit({
             filter: i => i.customId === 'eb_author' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -476,7 +476,7 @@ async function handleSetFooter(selectInteraction, rootInteraction, state) {
     const submitted = await selectInteraction
         .awaitModalSubmit({
             filter: i => i.customId === 'eb_footer' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 

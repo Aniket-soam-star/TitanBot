@@ -171,6 +171,8 @@ try {
                     i.customId.startsWith(`calc_${interaction.id}`) &&
                     i.user.id === interaction.user.id;
 const BUTTON_TIMEOUT = 300000;
+                if (!interaction.channel) return;
+
                 const collector =
                     interaction.channel.createMessageComponentCollector({
                         filter,
