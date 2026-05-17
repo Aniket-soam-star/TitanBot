@@ -220,7 +220,7 @@ export default {
                     i.user.id === interaction.user.id &&
                     i.customId === `ticket_config_${guildId}` &&
                     (!replyMessageId || i.message.id === replyMessageId),
-                time: 600_000,
+                time: 900_000,
             });
 
             const buttonCollector = interaction.channel.createMessageComponentCollector({
@@ -232,7 +232,7 @@ export default {
                         i.customId === `ticket_cfg_staff_role_btn_${guildId}` ||
                         i.customId === `ticket_cfg_delete_${guildId}`),
 
-                time: 600_000,
+                time: 900_000,
             });
 
             collector.on('collect', async (selectInteraction) => {
@@ -371,7 +371,7 @@ async function handlePanelMessage(selectInteraction, rootInteraction, guildConfi
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'ticket_cfg_panel_msg' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -426,7 +426,7 @@ async function handleButtonLabel(selectInteraction, rootInteraction, guildConfig
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'ticket_cfg_btn_label' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -484,7 +484,7 @@ async function handleStaffRole(selectInteraction, rootInteraction, guildConfig, 
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_staff_role',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -545,7 +545,7 @@ async function handleOpenCategory(selectInteraction, rootInteraction, guildConfi
         componentType: ComponentType.ChannelSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_open_cat',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -619,7 +619,7 @@ async function handleClosedCategory(
         componentType: ComponentType.ChannelSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_closed_cat',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -683,7 +683,7 @@ async function handleMaxTickets(selectInteraction, rootInteraction, guildConfig,
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'ticket_cfg_max_tickets' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -763,7 +763,7 @@ async function handleLogsChannel(selectInteraction, rootInteraction, guildConfig
     const collector = rootInteraction.channel.createMessageComponentCollector({
         componentType: ComponentType.ChannelSelect,
         filter: i => i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_logs_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1
     });
 
@@ -817,7 +817,7 @@ async function handleTranscriptChannel(selectInteraction, rootInteraction, guild
     const collector = rootInteraction.channel.createMessageComponentCollector({
         componentType: ComponentType.ChannelSelect,
         filter: i => i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_transcript_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1
     });
 
@@ -873,7 +873,7 @@ async function handleCheckUser(selectInteraction, rootInteraction, guildConfig, 
         componentType: ComponentType.UserSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'ticket_cfg_check_user',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -939,7 +939,7 @@ async function handleDeleteSystem(btnInteraction, rootInteraction, guildConfig, 
     const submitted = await btnInteraction
         .awaitModalSubmit({
             filter: i => i.customId === 'ticket_delete_confirm_modal' && i.user.id === btnInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
