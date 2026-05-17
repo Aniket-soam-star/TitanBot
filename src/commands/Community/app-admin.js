@@ -222,7 +222,7 @@ async function handleSetup(interaction) {
     try {
         const roleInteraction = await submitted.awaitMessageComponent({
             filter: i => i.user.id === interaction.user.id && i.customId === 'app_setup_role_select',
-            time: 60_000,
+            time: 300_000,
         });
         await roleInteraction.deferUpdate();
         roleId = roleInteraction.values[0];
@@ -360,7 +360,7 @@ async function handleReview(interaction) {
             i.user.id === interaction.user.id &&
             (i.customId.startsWith(`app_review_approve_${appId}`) ||
              i.customId.startsWith(`app_review_deny_${appId}`)),
-        time: 300_000, // 5 minutes
+        time: 900_000, // 15 minutes
         max: 1,
     });
 
@@ -388,7 +388,7 @@ async function handleReview(interaction) {
 
         try {
             const reasonSubmit = await buttonInteraction.awaitModalSubmit({
-                time: 5 * 60 * 1000, // 5 minutes
+                time: 15 * 60 * 1000, // 15 minutes
                 filter: i =>
                     i.customId === `app_review_reason_${appId}_${isApprove ? 'approve' : 'deny'}` &&
                     i.user.id === buttonInteraction.user.id,
@@ -589,8 +589,8 @@ async function handleList(interaction) {
             return InteractionHelper.safeEditReply(interaction, {
                 embeds: [
                     errorEmbed(
-                        "No applications found and no application roles configured.\n" +
-                        "Use `/app-admin roles add` to configure application roles first."
+                        "No Applications Configured",
+                        "No applications have been set up yet.\n\nUse `/app-admin setup` to create your first application."
                     ),
                 ],
                 flags: ["Ephemeral"],
