@@ -104,7 +104,7 @@ export default {
 
             const collector = msg.createMessageComponentCollector({
                 componentType: ComponentType.Button,
-                time: 120_000,
+                time: 300_000,
                 filter: i => i.user.id === interaction.user.id
             });
 
