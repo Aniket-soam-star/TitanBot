@@ -173,7 +173,7 @@ export default {
                 componentType: ComponentType.StringSelect,
                 filter: i =>
                     i.user.id === interaction.user.id && i.customId === `greet_cfg_${guildId}`,
-                time: 600_000,
+                time: 900_000,
             });
 
             collector.on('collect', async selectInteraction => {
@@ -233,7 +233,7 @@ export default {
                         i.customId === `greet_cfg_toggle_goodbye_${guildId}` ||
                         i.customId === `greet_cfg_ping_welcome_${guildId}` ||
                         i.customId === `greet_cfg_ping_goodbye_${guildId}`),
-                time: 600_000,
+                time: 900_000,
             });
 
             btnCollector.on('collect', async btnInteraction => {
@@ -336,7 +336,7 @@ async function handleWelcomeChannel(selectInteraction, rootInteraction, cfg, gui
     const chanCollector = rootInteraction.channel.createMessageComponentCollector({
         componentType: ComponentType.ChannelSelect,
         filter: i => i.user.id === selectInteraction.user.id && i.customId === 'greet_cfg_welcome_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -385,7 +385,7 @@ async function handleWelcomeMessage(selectInteraction, rootInteraction, cfg, gui
 
     const submitted = await selectInteraction.awaitModalSubmit({
         filter: i => i.customId === 'greet_cfg_welcome_message' && i.user.id === selectInteraction.user.id,
-        time: 120_000,
+        time: 300_000,
     }).catch(() => null);
 
     if (!submitted) return;
@@ -421,7 +421,7 @@ async function handleWelcomeImage(selectInteraction, rootInteraction, cfg, guild
 
     const submitted = await selectInteraction.awaitModalSubmit({
         filter: i => i.customId === 'greet_cfg_welcome_image' && i.user.id === selectInteraction.user.id,
-        time: 120_000,
+        time: 300_000,
     }).catch(() => null);
 
     if (!submitted) return;
@@ -477,7 +477,7 @@ async function handleGoodbyeChannel(selectInteraction, rootInteraction, cfg, gui
     const chanCollector = rootInteraction.channel.createMessageComponentCollector({
         componentType: ComponentType.ChannelSelect,
         filter: i => i.user.id === selectInteraction.user.id && i.customId === 'greet_cfg_goodbye_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -526,7 +526,7 @@ async function handleGoodbyeMessage(selectInteraction, rootInteraction, cfg, gui
 
     const submitted = await selectInteraction.awaitModalSubmit({
         filter: i => i.customId === 'greet_cfg_goodbye_message' && i.user.id === selectInteraction.user.id,
-        time: 120_000,
+        time: 300_000,
     }).catch(() => null);
 
     if (!submitted) return;
@@ -566,7 +566,7 @@ async function handleGoodbyeImage(selectInteraction, rootInteraction, cfg, guild
 
     const submitted = await selectInteraction.awaitModalSubmit({
         filter: i => i.customId === 'greet_cfg_goodbye_image' && i.user.id === selectInteraction.user.id,
-        time: 120_000,
+        time: 300_000,
     }).catch(() => null);
 
     if (!submitted) return;
