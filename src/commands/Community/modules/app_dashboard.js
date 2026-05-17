@@ -221,7 +221,7 @@ async function showApplicationSelector(interaction, roles, settings, guildId, cl
         componentType: ComponentType.StringSelect,
         filter: i =>
             i.user.id === interaction.user.id && i.customId === `app_select_${guildId}`,
-        time: 600_000,
+        time: 900_000,
         max: 1,
     });
 
@@ -365,7 +365,7 @@ function setupCollectors(interaction, settings, roles, guildId, client, selected
             (selectedRoleId 
                 ? i.customId === customIdPrefix
                 : (i.customId === `app_cfg_${guildId}` || i.customId === `app_select_${guildId}`)),
-        time: 600_000,
+        time: 900_000,
     });
 
     collector.on('collect', async selectInteraction => {
@@ -441,7 +441,7 @@ function setupCollectors(interaction, settings, roles, guildId, client, selected
             filter: i =>
                 i.user.id === interaction.user.id &&
                 i.customId === `app_cfg_toggle_${guildId}`,
-            time: 600_000,
+            time: 900_000,
         });
 
         globalToggleCollector.on('collect', async toggleInteraction => {
@@ -503,7 +503,7 @@ function setupCollectors(interaction, settings, roles, guildId, client, selected
             filter: i =>
                 i.user.id === interaction.user.id &&
                 i.customId === `app_delete_${selectedRoleId}`,
-            time: 600_000,
+            time: 900_000,
         });
 
         btnCollector.on('collect', async btnInteraction => {
@@ -540,7 +540,7 @@ function setupCollectors(interaction, settings, roles, guildId, client, selected
 
             try {
                 const confirmSubmit = await btnInteraction.awaitModalSubmit({
-                    time: 60_000,
+                    time: 300_000,
                     filter: i =>
                         i.customId === 'app_delete_confirm' && i.user.id === btnInteraction.user.id,
                 }).catch(() => null);
@@ -727,7 +727,7 @@ async function handleLogChannel(selectInteraction, rootInteraction, settings, ro
         componentType: ComponentType.ChannelSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'app_cfg_log_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -806,7 +806,7 @@ async function handleManagerRole(selectInteraction, rootInteraction, settings, r
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'app_cfg_manager_role',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -918,7 +918,7 @@ async function handleQuestions(selectInteraction, rootInteraction, settings, rol
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'app_cfg_questions' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -988,7 +988,7 @@ async function handleRoleAdd(selectInteraction, rootInteraction, settings, roles
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'app_cfg_role_add_pick',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -1029,7 +1029,7 @@ async function handleRoleAdd(selectInteraction, rootInteraction, settings, roles
             .awaitModalSubmit({
                 filter: i =>
                     i.customId === 'app_cfg_role_add_name' && i.user.id === roleInteraction.user.id,
-                time: 60_000,
+                time: 300_000,
             })
             .catch(() => null);
 
@@ -1099,7 +1099,7 @@ async function handleRoleRemove(selectInteraction, rootInteraction, settings, ro
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'app_cfg_role_remove_pick',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -1154,7 +1154,7 @@ async function handleRetention(selectInteraction, rootInteraction, settings, rol
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'app_cfg_retention' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
