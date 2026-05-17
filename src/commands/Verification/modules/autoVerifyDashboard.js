@@ -214,7 +214,7 @@ export default {
                 componentType: ComponentType.StringSelect,
                 filter: i =>
                     i.user.id === interaction.user.id && i.customId === `autoverify_cfg_${guildId}`,
-                time: 600_000,
+                time: 900_000,
             });
 
             collector.on('collect', async selectInteraction => {
@@ -259,7 +259,7 @@ export default {
                 filter: i =>
                     i.user.id === interaction.user.id && 
                     (i.customId === `autoverify_cfg_toggle_${guildId}` || i.customId === `autoverify_cfg_criteria_${guildId}`),
-                time: 600_000,
+                time: 900_000,
             });
 
             btnCollector.on('collect', async btnInteraction => {
@@ -355,7 +355,7 @@ async function handleCriteria(selectInteraction, rootInteraction, guildConfig, g
         componentType: ComponentType.StringSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'autoverify_criteria_select',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -429,7 +429,7 @@ async function handleRole(selectInteraction, rootInteraction, guildConfig, guild
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'autoverify_role_select',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -511,7 +511,7 @@ async function handleAccountAge(selectInteraction, rootInteraction, guildConfig,
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'autoverify_account_age_modal' && i.user.id === selectInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 

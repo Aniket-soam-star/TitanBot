@@ -231,7 +231,7 @@ export default {
                 componentType: ComponentType.StringSelect,
                 filter: i =>
                     i.user.id === interaction.user.id && i.customId === `verif_cfg_${guildId}`,
-                time: 600_000,
+                time: 900_000,
             });
 
             collector.on('collect', async selectInteraction => {
@@ -282,7 +282,7 @@ export default {
                 filter: i =>
                     i.user.id === interaction.user.id &&
                     i.customId === `verif_cfg_toggle_${guildId}`,
-                time: 600_000,
+                time: 900_000,
             });
 
             btnCollector.on('collect', async btnInteraction => {
@@ -425,7 +425,7 @@ async function handleChannel(selectInteraction, rootInteraction, cfg, guildId, c
         componentType: ComponentType.ChannelSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'verif_cfg_channel',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -523,7 +523,7 @@ async function handleRole(selectInteraction, rootInteraction, cfg, guildId, clie
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'verif_cfg_role',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -610,7 +610,7 @@ async function handleMessage(selectInteraction, rootInteraction, cfg, guildId, c
             .awaitModalSubmit({
                 filter: i =>
                     i.customId === 'verif_cfg_message' && i.user.id === selectInteraction.user.id,
-                time: 120_000,
+                time: 300_000,
             })
             .catch(() => null);
 
@@ -662,7 +662,7 @@ async function handleButtonText(selectInteraction, rootInteraction, cfg, guildId
             .awaitModalSubmit({
                 filter: i =>
                     i.customId === 'verif_cfg_button_text' && i.user.id === selectInteraction.user.id,
-                time: 120_000,
+                time: 300_000,
             })
             .catch(() => null);
 
