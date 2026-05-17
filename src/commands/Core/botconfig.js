@@ -712,7 +712,7 @@ export default {
                     );
 
                     const msg = await interaction.editReply({ embeds: [pages[0]], components: [buildRow(0)] });
-                    const col = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 90_000, filter: i => i.user.id === interaction.user.id });
+                    const col = msg.createMessageComponentCollector({ componentType: ComponentType.Button, time: 300_000, filter: i => i.user.id === interaction.user.id });
                     col.on('collect', async btn => {
                         await btn.deferUpdate();
                         if (btn.customId === 'bcfg_perm_prev' && page > 0) page--;

@@ -27,7 +27,7 @@ const GLOBAL_KEY = 'zerobot:global:config';
 
 const PERMS_PER_PAGE = 24;
 const CMDS_PER_PAGE  = 24;
-const PANEL_TIMEOUT  = 10 * 60 * 1000;
+const PANEL_TIMEOUT  = 15 * 60 * 1000;
 
 async function loadGlobal()        { return getFromDb(GLOBAL_KEY, {}); }
 async function saveGlobal(ov)      { await setInDb(GLOBAL_KEY, ov); }
