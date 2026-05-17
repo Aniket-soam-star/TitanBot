@@ -455,7 +455,7 @@ async function handleDashboard(interaction, selectedPanelId) {
         filter: i =>
             i.user.id === interaction.user.id &&
             (i.customId === `rr_opts_${guildId}`),
-        time: 600_000,
+        time: 900_000,
     });
 
     const buttonCollector = interaction.channel.createMessageComponentCollector({
@@ -464,7 +464,7 @@ async function handleDashboard(interaction, selectedPanelId) {
             i.user.id === interaction.user.id &&
             (i.customId === `rr_edit_text_${guildId}` ||
                 i.customId === `rr_delete_${guildId}`),
-        time: 600_000,
+        time: 900_000,
     });
 
     collector.on('collect', async ci => {
@@ -704,7 +704,7 @@ async function handleEditText(buttonInteraction, rootInteraction, panelData, gui
         .awaitModalSubmit({
             filter: i =>
                 i.customId === 'rr_edit_text' && i.user.id === buttonInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
@@ -766,7 +766,7 @@ async function handleAddRole(selectInteraction, rootInteraction, panelData, guil
         componentType: ComponentType.RoleSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'rr_add_role_pick',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -895,7 +895,7 @@ async function handleRemoveRole(selectInteraction, rootInteraction, panelData, p
         componentType: ComponentType.StringSelect,
         filter: i =>
             i.user.id === selectInteraction.user.id && i.customId === 'rr_remove_role_pick',
-        time: 60_000,
+        time: 300_000,
         max: 1,
     });
 
@@ -1017,7 +1017,7 @@ async function handleDeletePanel(btnInteraction, rootInteraction, panelData, pan
     const submitted = await btnInteraction
         .awaitModalSubmit({
             filter: i => i.customId === 'rr_delete_confirm_modal' && i.user.id === btnInteraction.user.id,
-            time: 120_000,
+            time: 300_000,
         })
         .catch(() => null);
 
