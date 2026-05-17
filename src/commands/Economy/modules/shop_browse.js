@@ -55,7 +55,7 @@ export default {
 
             const collector = message.createMessageComponentCollector({
                 componentType: ComponentType.Button,
-                time: 300000,
+                time: 900_000,
             });
 
             collector.on('collect', async (buttonInteraction) => {
