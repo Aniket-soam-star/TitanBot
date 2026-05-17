@@ -309,7 +309,7 @@ async function handleConfigSubcommand(interaction, client) {
         
         const collector = message.createMessageComponentCollector({
             componentType: ComponentType.Button,
-            time: 300000
+            time: 900_000,
         });
 
         collector.on('collect', async (buttonInteraction) => {
@@ -404,7 +404,7 @@ async function handleNameTemplateModal(interaction, triggerChannel, currentConfi
 
         const modalSubmission = await interaction.awaitModalSubmit({
             filter: (i) => i.customId === `jtc_name_modal_${triggerChannel.id}` && i.user.id === interaction.user.id,
-            time: 60000
+            time: 300_000,
         }).catch(() => null);
 
         if (!modalSubmission) return;
@@ -470,7 +470,7 @@ async function handleUserLimitModal(interaction, triggerChannel, currentConfig, 
 
         const modalSubmission = await interaction.awaitModalSubmit({
             filter: (i) => i.customId === `jtc_limit_modal_${triggerChannel.id}` && i.user.id === interaction.user.id,
-            time: 60000
+            time: 300_000,
         });
 
         // Recheck permissions
@@ -539,7 +539,7 @@ async function handleBitrateModal(interaction, triggerChannel, currentConfig, cl
 
         const modalSubmission = await interaction.awaitModalSubmit({
             filter: (i) => i.customId === `jtc_bitrate_modal_${triggerChannel.id}` && i.user.id === interaction.user.id,
-            time: 60000
+            time: 300_000,
         });
 
         // Recheck permissions
@@ -609,7 +609,7 @@ async function handleChannelDeletion(interaction, triggerChannel, currentConfig,
             filter: (i) => i.user.id === interaction.user.id && 
                           (i.customId === `jtc_delete_confirm_${triggerChannel.id}` || 
                            i.customId === `jtc_delete_cancel_${triggerChannel.id}`),
-            time: 600_000,
+            time: 900_000,
             max: 1
         });
 
